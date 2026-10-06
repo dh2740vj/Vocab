@@ -14,12 +14,12 @@ Firebase를 연결하지 않으면 지금 쓰는 기기의 브라우저에만 �
 | `firebase-config.js` | Firebase 프로젝트 설정을 붙여 넣는 곳 (처음엔 비어 있음) |
 | `firebase-sync.js` | Firebase 로그인과 데이터베이스 연결부 |
 | `firestore.rules` | Firebase에 붙여 넣을 보안 규칙 (올리지 않아도 되는 참고 파일) |
-| `icons/` | 앱 아이콘 |
+| `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png`, `favicon-32.png` | 앱 아이콘 (홈 화면, 안드로이드, 브라우저 탭) |
 
 ## 무료로 올리기 (GitHub Pages)
 
 1. GitHub에서 새 저장소를 만듭니다. 예: `vocab`
-2. 이 폴더의 파일을 전부 그대로 올립니다. (`index.html`이 저장소 맨 위에 있어야 해요)
+2. 저장소의 **Add file → Upload files** (빈 저장소라면 **uploading an existing file** 링크)에서 **choose your files**를 누르고, 이 폴더의 파일 12개를 전부 골라 올립니다. 폴더 없이 파일만 있어서 한 번에 고를 수 있어요.
 3. 저장소의 **Settings → Pages**에서 Source를 `Deploy from a branch`, 브랜치를 `main` / `(root)`로 정하고 저장합니다.
 4. 1~2분 뒤 `https://<아이디>.github.io/vocab/` 주소로 열립니다.
 
@@ -121,7 +121,7 @@ putovati,"여행하다, 여행가다",Volim putovati.
 
 ## 수정해서 다시 올릴 때
 
-`sw.js` 맨 위의 `CACHE = 'vocab-v10'`를 `vocab-v11`처럼 올려야 기기에 새 버전이 반영됩니다.
+`sw.js` 맨 위의 `CACHE = 'vocab-v12'`를 `vocab-v13`처럼 올려야 기기에 새 버전이 반영됩니다.
 홈 화면 앱은 완전히 닫았다가 다시 열면 업데이트됩니다.
 
 ## 학습 방식 (레이트너 상자)

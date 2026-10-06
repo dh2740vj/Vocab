@@ -1,7 +1,7 @@
 // 오프라인에서도 앱이 열리도록 화면 파일을 캐시해 두는 서비스 워커
 // 앱을 수정해서 다시 올릴 때는 아래 버전 숫자를 올려 주세요.
-const CACHE = 'vocab-v10';
-const SHELL = ['./', './index.html', './firebase-config.js', './firebase-sync.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
+const CACHE = 'vocab-v12';
+const SHELL = ['./', './index.html', './firebase-config.js', './firebase-sync.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './icon-maskable-512.png', './favicon-32.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

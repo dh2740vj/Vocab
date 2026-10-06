@@ -261,6 +261,11 @@ details.panel:not([open]){gap:0}
 .csvprev th{text-align:left;font-weight:600;color:var(--muted);background:var(--bg);padding:6px 8px;font-size:12px}
 .csvprev td{padding:6px 8px;border-top:1px solid var(--line);max-width:14em;overflow-wrap:anywhere;vertical-align:top}
 .csvsum{display:flex;flex-direction:column;gap:6px;font-size:14px}
+.countrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.countin{display:inline-flex;align-items:center;gap:6px;font-size:14px}
+.countin .input{width:76px;min-height:38px;padding:6px 8px;text-align:center}
+.countin.on .input{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.progress .linkbtn{flex:none;font-size:12px}
 .warnhead{display:flex;align-items:center;gap:10px}
 .warnhead i{flex:none;width:30px;height:30px;border-radius:50%;background:var(--mark);display:grid;place-items:center;font-style:normal;font-weight:700;color:var(--ink)}
 
@@ -978,6 +983,37 @@ let deckOpen = false;   // 단어장 탭: false면 단어장 목록, true면 고
 let searchText = '';
 const sessions = { cards: null, dict: null, mean: null, quiz: null };
 const opts = { fcSource: 'due', fcFront: 'term', qzDir: 't2m' };
+// 모드별 문제 수: 숫자 또는 'all'(전체). 기기마다 기억함
+const COUNT_DEFAULT = { cards: 30, dict: 10, mean: 10, quiz: 10 };
+function getCount(mode){ const c = (db.settings.counts || {})[mode]; return c === 'all' || (Number.isInteger(c) && c > 0) ? c : COUNT_DEFAULT[mode]; }
+function setCount(mode, v){ db.settings.counts = Object.assign({}, db.settings.counts, { [mode]: v }); save(); }
+// 실제로 낼 개수
+function resolveCount(mode, available){ const c = getCount(mode); return c === 'all' ? available : Math.min(c, available); }
+function countPicker(mode, available, unit){
+  const c = getCount(mode);
+  const presets = [10, 20, 50].filter(n => n < available);
+  const isPreset = c === 'all' || presets.includes(c);
+  return `<div class="field"><label for="cnt-${mode}">${unit === '장' ? '카드 수' : '문제 수'}</label>
+    <div class="countrow">
+      <div class="seg">
+        ${presets.map(n => `<button data-action="set-count" data-mode="${mode}" data-val="${n}" aria-pressed="${c === n}">${n}</button>`).join('')}
+        <button data-action="set-count" data-mode="${mode}" data-val="all" aria-pressed="${c === 'all' || c >= available}">전체 <span class="num">${available}</span></button>
+      </div>
+      <label class="countin ${!isPreset && c < available ? 'on' : ''}"><span class="muted">직접</span>
+        <input class="input num" type="number" inputmode="numeric" min="1" max="${available}" id="cnt-${mode}" data-mode="${mode}" value="${c === 'all' ? available : Math.min(c, available)}" aria-label="개수 직접 입력">${unit}</label>
+    </div></div>`;
+}
+const startLabel = (mode, available, unit) => {
+  const n = resolveCount(mode, available);
+  return getCount(mode) === 'all' || n === available ? `전체 ${available}${unit} 시작` : `${n}${unit} 시작`;
+};
+// 개수만큼 고르기: 일부만 할 때는 오늘 복습할 단어 먼저, 전체일 때는 모두 섞기
+function pickFor(mode, words, onlyDue){
+  const pool = onlyDue ? words.filter(isDue) : words;
+  const n = resolveCount(mode, pool.length);
+  if (n >= pool.length) return shuffle(pool).map(w => w.id);
+  return pickSession(pool, n, false);
+}
 function resetSessions(){ sessions.cards = sessions.dict = sessions.mean = sessions.quiz = null; }
 
 /* ---------- 공통 렌더 ---------- */
@@ -1217,17 +1253,18 @@ function viewCards(){
       <div class="field"><label>카드 범위</label>
         <div class="seg">
           <button data-action="set-opt" data-key="fcSource" data-val="due" aria-pressed="${opts.fcSource === 'due'}">오늘 복습 <span class="num">${due}</span></button>
-          <button data-action="set-opt" data-key="fcSource" data-val="all" aria-pressed="${opts.fcSource === 'all'}">전체 섞기 <span class="num">${words.length}</span></button>
+          <button data-action="set-opt" data-key="fcSource" data-val="all" aria-pressed="${opts.fcSource === 'all'}">모든 단어 <span class="num">${words.length}</span></button>
         </div>
       </div>
+      ${opts.fcSource === 'due' && !due ? '' : countPicker('cards', opts.fcSource === 'due' ? due : words.length, '장')}
       <div class="field"><label>앞면</label>
         <div class="seg">
           <button data-action="set-opt" data-key="fcFront" data-val="term" aria-pressed="${opts.fcFront === 'term'}">단어</button>
           <button data-action="set-opt" data-key="fcFront" data-val="meaning" aria-pressed="${opts.fcFront === 'meaning'}">뜻</button>
         </div>
       </div>
-      ${opts.fcSource === 'due' && !due ? `<p class="banner">오늘 복습할 단어를 모두 끝냈어요. 더 하고 싶다면 '전체 섞기'를 골라 주세요.</p>` : ''}
-      <div class="row end"><button class="btn primary" data-action="fc-start" ${opts.fcSource === 'due' && !due ? 'disabled' : ''}>시작</button></div>
+      ${opts.fcSource === 'due' && !due ? `<p class="banner">오늘 복습할 단어를 모두 끝냈어요. 더 하고 싶다면 '모든 단어'를 골라 주세요.</p>` : ''}
+      <div class="row end"><button class="btn primary" data-action="fc-start" ${opts.fcSource === 'due' && !due ? 'disabled' : ''}>${opts.fcSource === 'due' && !due ? '시작' : startLabel('cards', opts.fcSource === 'due' ? due : words.length, '장')}</button></div>
     </section>`;
   }
   if (s.i >= s.queue.length) {
@@ -1239,7 +1276,7 @@ function viewCards(){
   const meaningFace = `<div class="mid">${esc(w.meaning)}</div>${w.example ? `<div class="ex">${esc(w.example)}</div>` : ''}`;
   const frontIsTerm = opts.fcFront === 'term';
   return `
-  <div class="progress"><span class="num">${s.i + 1} / ${s.queue.length}</span><div class="bar"><i style="width:${s.i / s.queue.length * 100}%"></i></div><span class="num">알았어요 ${s.known}</span></div>
+  <div class="progress"><span class="num">${s.i + 1} / ${s.queue.length}</span><div class="bar"><i style="width:${s.i / s.queue.length * 100}%"></i></div><span class="num">알았어요 ${s.known}</span>${s.queue.length > 10 ? `<button class="linkbtn" data-action="end-early" data-mode="cards">그만하기</button>` : ''}</div>
   <div class="cardwrap" id="cardWrap" tabindex="0" role="button" aria-label="카드 뒤집기">
     <div class="card ${s.flipped ? 'flipped' : ''}" id="card">
       <div class="face front"><div class="head"><span>${frontIsTerm ? '단어' : '뜻'}</span><span>상자 ${w.box}</span></div><div class="content">${frontIsTerm ? termFace : meaningFace}</div></div>
@@ -1298,10 +1335,11 @@ function viewDict(){
     return `<section class="panel">
       <span class="eyebrow">받아쓰기</span>
       <h2>발음을 듣고 철자를 정확히 써 보세요</h2>
-      <p class="muted">오늘 복습할 단어부터 최대 10개를 내요. 대소문자와 앞뒤 공백은 채점에서 무시하고, "color/colour"처럼 저장한 표기는 모두 정답으로 쳐요.</p>
+      ${countPicker('dict', words.length, '개')}
+      <p class="muted">일부만 고르면 오늘 복습할 단어부터 내고, 전체를 고르면 모든 단어를 섞어서 내요. 대소문자와 앞뒤 공백은 채점에서 무시하고, "color/colour"처럼 저장한 표기는 모두 정답으로 쳐요.</p>
       <p class="muted">크로아티아어 단어는 입력창 아래 č ć đ š ž 버튼으로 부호를 넣을 수 있어요. 부호만 빠뜨린 답은 정답으로 치고 따로 알려 줘요.</p>
       ${canSpeak ? '' : `<p class="banner">이 브라우저는 음성 재생을 지원하지 않아요. 뜻을 보고 단어를 쓰는 방식으로 진행돼요.</p>`}
-      <div class="row end"><button class="btn primary" data-action="dc-start">시작</button></div>
+      <div class="row end"><button class="btn primary" data-action="dc-start">${startLabel('dict', words.length, '개')}</button></div>
     </section>`;
   }
   if (s.i >= s.queue.length) {
@@ -1311,7 +1349,7 @@ function viewDict(){
   if (!w) { s.i++; return viewDict(); }
   const showMeaning = s.showMeaning || !canSpeak;
   return `
-  <div class="progress"><span class="num">${s.i + 1} / ${s.queue.length}</span><div class="bar"><i style="width:${s.i / s.queue.length * 100}%"></i></div><span class="num">맞힘 ${s.score}</span></div>
+  <div class="progress"><span class="num">${s.i + 1} / ${s.queue.length}</span><div class="bar"><i style="width:${s.i / s.queue.length * 100}%"></i></div><span class="num">맞힘 ${s.score}</span>${s.queue.length > 10 ? `<button class="linkbtn" data-action="end-early" data-mode="dict">그만하기</button>` : ''}</div>
   <section class="panel">
     ${canSpeak ? `<div class="listen">
       <button class="playbtn" data-action="dc-play" aria-label="발음 듣기">${ICON.play}</button>
@@ -1352,9 +1390,10 @@ function viewMean(){
     return `<section class="panel">
       <span class="eyebrow">뜻쓰기</span>
       <h2>단어를 보고 우리말 뜻을 직접 써 보세요</h2>
-      <p class="muted">오늘 복습할 단어부터 최대 10개를 내요. 뜻이 여러 개면 그중 하나만 써도 정답이고, 띄어쓰기나 '-하다 / -한' 같은 어미 차이는 봐줘요.</p>
+      ${countPicker('mean', words.length, '개')}
+      <p class="muted">일부만 고르면 오늘 복습할 단어부터 내고, 전체를 고르면 모든 단어를 섞어서 내요. 뜻이 여러 개면 그중 하나만 써도 정답이고, 띄어쓰기나 '-하다 / -한' 같은 어미 차이는 봐줘요.</p>
       <p class="muted">자동 채점이 틀렸다고 생각되면 결과 화면에서 '맞은 걸로 처리'를 누르면 돼요.</p>
-      <div class="row end"><button class="btn primary" data-action="mn-start">시작</button></div>
+      <div class="row end"><button class="btn primary" data-action="mn-start">${startLabel('mean', words.length, '개')}</button></div>
     </section>`;
   }
   if (s.i >= s.queue.length) {
@@ -1363,7 +1402,7 @@ function viewMean(){
   const w = wordById(s.queue[s.i]);
   if (!w) { s.i++; return viewMean(); }
   return `
-  <div class="progress"><span class="num">${s.i + 1} / ${s.queue.length}</span><div class="bar"><i style="width:${s.i / s.queue.length * 100}%"></i></div><span class="num">맞힘 ${s.score}</span></div>
+  <div class="progress"><span class="num">${s.i + 1} / ${s.queue.length}</span><div class="bar"><i style="width:${s.i / s.queue.length * 100}%"></i></div><span class="num">맞힘 ${s.score}</span>${s.queue.length > 10 ? `<button class="linkbtn" data-action="end-early" data-mode="mean">그만하기</button>` : ''}</div>
   <section class="panel">
     <div class="askterm">
       <div class="big">${esc(w.term)}</div>
@@ -1431,9 +1470,10 @@ function viewQuiz(){
           <button data-action="set-opt" data-key="qzDir" data-val="m2t" aria-pressed="${opts.qzDir === 'm2t'}">뜻 → 단어</button>
         </div>
       </div>
-      <p class="muted">오늘 복습할 단어부터 최대 10문제를 내요. 오답 보기는 같은 단어장의 다른 단어에서 골라요.</p>
+      ${countPicker('quiz', words.length, '문제')}
+      <p class="muted">일부만 고르면 오늘 복습할 단어부터 내고, 전체를 고르면 모든 단어를 섞어서 내요. 오답 보기는 같은 단어장의 다른 단어에서 골라요.</p>
       ${poolOk ? '' : `<p class="banner">보기를 만들려면 서로 다른 단어가 최소 4개 필요해요. 단어를 조금 더 추가해 주세요.</p>`}
-      <div class="row end"><button class="btn primary" data-action="qz-start" ${poolOk ? '' : 'disabled'}>시작</button></div>
+      <div class="row end"><button class="btn primary" data-action="qz-start" ${poolOk ? '' : 'disabled'}>${startLabel('quiz', words.length, '문제')}</button></div>
     </section>`;
   }
   if (s.i >= s.qs.length) {
@@ -1442,7 +1482,7 @@ function viewQuiz(){
   const q = s.qs[s.i];
   const answered = s.selected !== null;
   return `
-  <div class="progress"><span class="num">${s.i + 1} / ${s.qs.length}</span><div class="bar"><i style="width:${s.i / s.qs.length * 100}%"></i></div><span class="num">맞힘 ${s.score}</span></div>
+  <div class="progress"><span class="num">${s.i + 1} / ${s.qs.length}</span><div class="bar"><i style="width:${s.i / s.qs.length * 100}%"></i></div><span class="num">맞힘 ${s.score}</span>${s.qs.length > 10 ? `<button class="linkbtn" data-action="end-early" data-mode="quiz">그만하기</button>` : ''}</div>
   <section class="panel">
     <div class="prompt ${s.dir === 'm2t' ? 'ko' : ''}">${esc(q.prompt)}</div>
     <div class="choices">
@@ -1814,6 +1854,17 @@ const actions = {
   'speak-word': a => { const w = wordById(a.dataset.id); if (w) speakWord(w); },
   'edit-word': a => editSheet(a.dataset.id),
   'sheet-close': () => closeSheet(),
+  'set-count': a => { setCount(a.dataset.mode, a.dataset.val === 'all' ? 'all' : Number(a.dataset.val)); render(); },
+  // 지금까지 푼 문제까지만 결과로 보여줌
+  'end-early': a => {
+    const s = sessions[a.dataset.mode]; if (!s) return;
+    const answered = a.dataset.mode === 'quiz' ? s.i + (s.selected !== null ? 1 : 0)
+      : a.dataset.mode === 'cards' ? s.i : s.i + (s.answered ? 1 : 0);
+    if (!answered) { sessions[a.dataset.mode] = null; render(); return; }
+    if (a.dataset.mode === 'quiz') { s.qs = s.qs.slice(0, answered); s.i = answered; s.selected = null; }
+    else { s.queue = s.queue.slice(0, answered); s.i = answered; s.answered = false; }
+    window.scrollTo(0, 0); render();
+  },
   'csv-pick': a => {
     let t = a.dataset.target;
     if (t === 'current') t = $('fDeck')?.value || 'new';
@@ -1937,7 +1988,7 @@ const actions = {
   },
   'dup-edit': a => { pendingAdd = null; editSheet(a.dataset.id); },
   // 뜻쓰기
-  'mn-start': () => startMean(pickSession(currentWords(), 10)),
+  'mn-start': () => startMean(pickFor('mean', currentWords())),
   'mn-speak': () => { const s = sessions.mean; const w = s && wordById(s.queue[s.i]); if (w) speakWord(w); },
   'mn-example': () => { const s = sessions.mean; s.input = $('meanInput')?.value ?? s.input; s.showExample = !s.showExample; render(); },
   'mn-override': () => {
@@ -1959,7 +2010,7 @@ const actions = {
   // 플래시카드
   'fc-start': () => {
     const words = currentWords();
-    const ids = opts.fcSource === 'due' ? pickSession(words, 30, true) : shuffle(words).slice(0, 30).map(w => w.id);
+    const ids = pickFor('cards', words, opts.fcSource === 'due');
     if (!ids.length) { toast('카드가 없어요'); return; }
     sessions.cards = { queue: ids, i: 0, known: 0, missed: [], flipped: false }; render();
   },
@@ -1969,7 +2020,7 @@ const actions = {
   'fc-retry': () => { const ids = shuffle(sessions.cards.missed); sessions.cards = { queue: ids, i: 0, known: 0, missed: [], flipped: false }; render(); },
   'fc-new': () => { sessions.cards = null; render(); },
   // 받아쓰기
-  'dc-start': () => startDict(pickSession(currentWords(), 10)),
+  'dc-start': () => startDict(pickFor('dict', currentWords())),
   'dc-play': a => { const s = sessions.dict; const w = s && wordById(s.queue[s.i]); if (w) speakWord(w, a.dataset.rate ? Number(a.dataset.rate) : undefined); },
   'dc-meaning': () => { const s = sessions.dict; s.input = $('dictInput')?.value ?? s.input; s.showMeaning = !s.showMeaning; render(); },
   'dc-next': () => {
@@ -1981,7 +2032,7 @@ const actions = {
   'dc-retry': () => startDict(shuffle(sessions.dict.missed)),
   'dc-new': () => { sessions.dict = null; render(); },
   // 퀴즈
-  'qz-start': () => startQuiz(pickSession(currentWords(), 10)),
+  'qz-start': () => startQuiz(pickFor('quiz', currentWords())),
   'qz-choose': a => chooseQuiz(Number(a.dataset.idx)),
   'qz-speak': () => { const s = sessions.quiz; const w = s && wordById(s.qs[s.i].id); if (w) speakWord(w); },
   'qz-next': () => { const s = sessions.quiz; s.i++; s.selected = null; render(); },
@@ -2141,6 +2192,11 @@ document.addEventListener('input', e => {
   }
 });
 document.addEventListener('change', e => {
+  if (e.target.id && e.target.id.startsWith('cnt-')) {
+    const n = Math.floor(Number(e.target.value)), max = Number(e.target.max);
+    if (!n || n < 1) { render(); return; }
+    setCount(e.target.dataset.mode, n >= max ? 'all' : n); render(); return;
+  }
   if (e.target.id === 'csvFile') { const f = e.target.files && e.target.files[0]; closeSheet(); openCsvFile(f, e.target.dataset.target); return; }
   if (csvState && /^csv/.test(e.target.id)) {
     const s = csvState, v = e.target.value;
@@ -2165,6 +2221,7 @@ document.addEventListener('pointerdown', e => { if (e.target.closest('.charpad b
 document.addEventListener('mousedown', e => { if (e.target.closest('.charpad button')) e.preventDefault(); });
 
 document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.id && e.target.id.startsWith('cnt-')) { e.preventDefault(); e.target.blur(); return; }
   // 추가 창: 엔터나 탭을 누르면 뜻 찾기 버튼이나 후보를 거치지 않고 다음 칸으로
   if ((e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) && ['fTerm', 'fMeaning', 'fExample'].includes(e.target.id)) {
     if (e.isComposing || e.keyCode === 229) return;   // 한글 조합 중인 엔터는 무시

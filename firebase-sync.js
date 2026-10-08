@@ -4,7 +4,8 @@
 //
 // 데이터 위치 (Firestore)
 //   users/{로그인한 사람 uid}/decks/{단어장 id}   name, lang, createdAt, updatedAt
-//   users/{로그인한 사람 uid}/words/{단어 id}     deckId, term, meaning, example, box, nextReview, correct, wrong, createdAt, updatedAt
+//   users/{로그인한 사람 uid}/words/{단어 id}     deckId, term, meaning, example, box, nextReview, correct, wrong, unknown, createdAt, updatedAt
+//   users/{로그인한 사람 uid}/groups/{그룹 id}    name, examDate, deckIds, createdAt, updatedAt
 
 const VERSION = '10.14.1';
 const BASE = `https://www.gstatic.com/firebasejs/${VERSION}/`;
@@ -37,7 +38,7 @@ if (config && sync) {
       signOut: () => A.signOut(auth),
       resetPassword: email => A.sendPasswordResetEmail(auth, email),
 
-      // kind: 'decks' | 'words'. 바뀐 문서만 넘김. pending은 이 기기가 쓰고 아직 서버가 확인하지 않은 문서
+      // kind: 'decks' | 'words' | 'groups'. 바뀐 문서만 넘김. pending은 이 기기가 쓰고 아직 서버가 확인하지 않은 문서
       listen(uid, kind, onSnap, onError) {
         return F.onSnapshot(
           F.collection(fs, 'users', uid, kind),

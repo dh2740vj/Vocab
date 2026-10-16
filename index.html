@@ -559,7 +559,12 @@ function fillDefaults(d){
     d.settings.currentDeck = ids.length >= 2 ? 'multi' : ids.length === 1 ? ids[0] : 'all';
   } else if (String(d.settings.currentDeck).startsWith('group:')) {
     if (!d.groups.some(g => 'group:' + g.id === d.settings.currentDeck)) d.settings.currentDeck = 'all';
-  } else if (!['all', 'unknown'].includes(d.settings.currentDeck) && !d.decks.some(x => x.id === d.settings.currentDeck)) d.settings.currentDeck = 'all';
+  } else if (d.settings.currentDeck === 'unknown') d.settings.currentDeck = 'unk:all';
+  else if (String(d.settings.currentDeck).startsWith('unk:')) {
+    const base = d.settings.currentDeck.slice(4);
+    const ok = base === 'all' || d.decks.some(x => x.id === base) || (base.startsWith('group:') && d.groups.some(g => 'group:' + g.id === base));
+    if (!ok) d.settings.currentDeck = 'unk:all';
+  } else if (!['all'].includes(d.settings.currentDeck) && !d.decks.some(x => x.id === d.settings.currentDeck)) d.settings.currentDeck = 'all';
   return d;
 }
 
@@ -851,7 +856,8 @@ function mergeLists(kind, localList, remoteMap){
 // 서버 데이터로 db가 바뀐 뒤: 기본값 채우고, 사라진 단어장 처리, 저장, 다시 그리기
 function afterRemoteData(){
   fillDefaults(db);
-  if (deckOpen && !['all', 'multi', 'unknown'].includes(db.settings.currentDeck) && !deckById(db.settings.currentDeck) && !groupOf(db.settings.currentDeck)) deckOpen = false;
+  if (deckOpen && !scopeValid(db.settings.currentDeck)) { deckOpen = false; navStack = []; }
+  navStack = navStack.filter(scopeValid);
   Store.save(db);
   safeRender();
 }
@@ -897,13 +903,31 @@ function sortedGroups(){
 const isDue = w => w.nextReview <= endOfToday();
 const deckById = id => db.decks.find(d => d.id === id);
 const wordById = id => db.words.find(w => w.id === id);
-function currentWords(){
-  const c = db.settings.currentDeck;
+// 범위: 'all' | 단어장 id | 'multi' | 'group:<id>' | 'unk:<범위>'(그 범위의 모르는 단어만, 예: 'unk:all', 'unk:<단어장 id>')
+const isUnkScope = c => String(c).startsWith('unk:');
+const unkBase = c => String(c).slice(4);
+function scopeWords(c){
+  if (isUnkScope(c)) return scopeWords(unkBase(c)).filter(w => w.unknown);
   if (c === 'all') return db.words;
   if (c === 'multi') { const set = new Set(db.settings.selectedDecks); return db.words.filter(w => set.has(w.deckId)); }
-  if (c === 'unknown') return db.words.filter(w => w.unknown);
   const g = groupOf(c); if (g) return groupWords(g);
   return db.words.filter(w => w.deckId === c);
+}
+function currentWords(){ return scopeWords(db.settings.currentDeck); }
+function scopeValid(c){
+  if (isUnkScope(c)) return scopeValid(unkBase(c));
+  if (c === 'all') return true;
+  if (c === 'multi') return (db.settings.selectedDecks || []).length >= 2;
+  if (String(c).startsWith('group:')) return !!groupOf(c);
+  return !!deckById(c);
+}
+function scopeName(c){
+  if (c === 'unk:all') return '모르는 단어';
+  if (isUnkScope(c)) return `${scopeName(unkBase(c))} · 모르는 단어`;
+  if (c === 'all') return '모든 단어';
+  if (c === 'multi') return `선택한 단어장 ${(db.settings.selectedDecks || []).length}개`;
+  const g = groupOf(c); if (g) return g.name;
+  return deckById(c)?.name || '단어장';
 }
 function nextLabel(w){
   if (isDue(w)) return '복습';
@@ -1117,7 +1141,8 @@ function renderDeckSelect(){
   const multi = c === 'multi' ? db.settings.selectedDecks : null;
   sel.innerHTML = `<option value="all">모든 단어장 (${db.words.length})</option>` +
     (multi ? `<option value="multi">선택한 단어장 ${multi.length}개 (${currentWords().length})</option>` : '') +
-    (unknownCount() || c === 'unknown' ? `<option value="unknown">모르는 단어 (${unknownCount()})</option>` : '') +
+    (unknownCount() || c === 'unk:all' ? `<option value="unk:all">모르는 단어 (${unknownCount()})</option>` : '') +
+    (isUnkScope(c) && c !== 'unk:all' ? `<option value="${esc(c)}">${esc(scopeName(c))} (${currentWords().length})</option>` : '') +
     sortedGroups().map(g => `<option value="group:${g.id}">그룹 · ${esc(g.name)} (${groupWords(g).length})</option>`).join('') +
     db.decks.map(d => `<option value="${d.id}">${esc(d.name)} (${db.words.filter(w => w.deckId === d.id).length})</option>`).join('');
   sel.value = c;
@@ -1165,8 +1190,16 @@ function resultBlock({ title, score, total, missed, retryAction, newAction, miss
 const CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>';
 const langTag = lang => `<span class="langtag">${esc(String(lang || 'en').slice(0, 2).toUpperCase())}</span>`;
 let picking = false, picked = new Set();   // 여러 단어장 고르기
-let deckParent = null;                     // 그룹에서 단어장을 열었을 때 돌아갈 그룹
+let navStack = [];                         // 단어장 화면에서 열어 온 순서 (뒤로가기로 하나씩 돌아감)
 // 홈(단어장 목록) 한 줄 항목
+function unkByDeck(){
+  const rows = db.decks.map(d => [d, db.words.filter(w => w.deckId === d.id && w.unknown).length]).filter(([, n]) => n);
+  if (!rows.length) return '';
+  return `<div class="rowlabel">단어장별</div><ul class="rows">${rows.map(([d, n]) => `<li><button class="rowbtn" data-action="open-deck" data-id="unk:${d.id}">
+    <span class="rowicon deck" aria-hidden="true">${esc(String(d.lang || 'en').slice(0, 2).toUpperCase())}</span>
+    <span class="rowmain"><span class="rowname">${esc(d.name)}</span><span class="rowmeta"><span class="unk num">모름 ${n}</span></span></span>${CHEV}</button></li>`).join('')}</ul>
+    <div class="rowlabel">모든 모르는 단어</div>`;
+}
 function deckRow(d){
   const ws = db.words.filter(w => w.deckId === d.id);
   const due = ws.filter(isDue).length, unk = ws.filter(w => w.unknown).length;
@@ -1196,7 +1229,7 @@ function viewDeckList(){
   const loose = picking ? db.decks : db.decks.filter(d => !inGroup.has(d.id));
   const unk = unknownCount();
   const top = [];
-  if (!picking && unk) top.push(`<li><button class="rowbtn" data-action="open-deck" data-id="unknown">
+  if (!picking && unk) top.push(`<li><button class="rowbtn" data-action="open-deck" data-id="unk:all">
       <span class="rowicon unkic" aria-hidden="true">?</span>
       <span class="rowmain"><span class="rowname">모르는 단어</span><span class="rowmeta"><span class="unk num">${unk}개</span><span>플래시카드에서 '몰라요'를 누른 단어</span></span></span>${CHEV}</button></li>`);
   return `
@@ -1227,17 +1260,28 @@ function viewWords(){
   const cur = deckById(db.settings.currentDeck);
   const multi = db.settings.currentDeck === 'multi' ? db.settings.selectedDecks.map(deckById).filter(Boolean) : null;
   const grp = groupOf(db.settings.currentDeck), gdd = grp && dday(grp.examDate);
+  const unkHere = isUnkScope(db.settings.currentDeck);
+  const unkInScope = !unkHere && db.settings.currentDeck !== 'all' ? words.filter(w => w.unknown).length : 0;
   return `
-  <div class="backbar"><button class="btn ghost" data-action="deck-back">${CHEV.replace('class="chev"', 'style="width:18px;height:18px;transform:scaleX(-1)"')}${deckParent && groupById(deckParent) && db.settings.currentDeck !== 'group:' + deckParent ? esc(groupById(deckParent).name) : '단어장 목록'}</button>
+  <div class="backbar"><button class="btn ghost" data-action="deck-back">${CHEV.replace('class="chev"', 'style="width:18px;height:18px;transform:scaleX(-1)"')}${navStack.length ? esc(scopeName(navStack[navStack.length - 1])) : '단어장 목록'}</button>
     <button class="addbtn" data-action="add-open" aria-label="단어 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
-  <div class="deckhead"><h2>${cur ? esc(cur.name) : grp ? esc(grp.name) : multi ? `선택한 단어장 ${multi.length}개` : db.settings.currentDeck === 'unknown' ? '모르는 단어' : '모든 단어'}</h2>${cur ? langTag(cur.lang) : ''}${gdd ? `<span class="dday ${gdd.soon ? 'soon' : ''}">${gdd.text}</span>` : ''}${grp ? `<button class="linkbtn" data-action="group-edit" data-id="${grp.id}" style="margin-left:auto">그룹 편집</button>` : ''}</div>
+  <div class="deckhead"><h2>${esc(scopeName(db.settings.currentDeck))}</h2>${cur ? langTag(cur.lang) : ''}${gdd ? `<span class="dday ${gdd.soon ? 'soon' : ''}">${gdd.text}</span>` : ''}${grp ? `<button class="linkbtn" data-action="group-edit" data-id="${grp.id}" style="margin-left:auto">그룹 편집</button>` : ''}</div>
   ${grp ? `${groupDecks(grp).length ? `<ul class="rows">${groupDecks(grp).map(deckRow).join('')}</ul>` : `<p class="muted" style="font-size:13px">아직 단어장이 없어요. '그룹 편집'에서 넣어 주세요.</p>`}
     <div class="focusrow" role="group" aria-label="이 그룹으로 학습">
       <span class="muted">이 그룹으로</span>
       <button class="btn" data-action="tab" data-view="cards">플래시카드</button><button class="btn" data-action="tab" data-view="dict">받아쓰기</button>
       <button class="btn" data-action="tab" data-view="mean">뜻쓰기</button><button class="btn" data-action="tab" data-view="quiz">퀴즈</button>
     </div>` : ''}
-  ${db.settings.currentDeck === 'unknown' ? `<p class="muted" style="font-size:13px;margin-top:-8px">플래시카드에서 '몰라요'를 누른 단어가 모여요. 플래시카드에서 '알아요'를 누르거나 ✓를 누르면 여기서 빠져요.</p>` : ''}
+  ${unkHere ? `<p class="muted" style="font-size:13px;margin-top:-8px">플래시카드에서 '몰라요'를 누른 단어예요. '알아요'를 누르거나 ✓를 누르면 빠져요.</p>` : ''}
+  ${unkHere && words.length ? `<div class="focusrow" role="group" aria-label="모르는 단어로 학습">
+      <span class="muted">이 단어들로</span>
+      <button class="btn" data-action="study-unk" data-view="cards">플래시카드</button><button class="btn" data-action="tab" data-view="dict">받아쓰기</button>
+      <button class="btn" data-action="tab" data-view="mean">뜻쓰기</button><button class="btn" data-action="tab" data-view="quiz">퀴즈</button>
+    </div>` : ''}
+  ${unkHere && unkBase(db.settings.currentDeck) !== 'all' || !unkHere ? '' : unkByDeck()}
+  ${!unkHere && unkInScope ? `<ul class="rows"><li><button class="rowbtn" data-action="open-deck" data-id="unk:${esc(db.settings.currentDeck)}">
+      <span class="rowicon unkic" aria-hidden="true">?</span>
+      <span class="rowmain"><span class="rowname">이 ${grp ? '그룹' : '단어장'}의 모르는 단어</span><span class="rowmeta"><span class="unk num">${unkInScope}개</span><span>따로 모아 보고 학습하기</span></span></span>${CHEV}</button></li></ul>` : ''}
   ${multi ? `<div class="pickchips">${multi.map(d => `<span class="pickchip">${esc(d.name)}${langTag(d.lang)}</span>`).join('')}</div>` : ''}
   <section class="summary">
     <div class="stat"><b class="num">${words.length}</b><span>단어</span></div>
@@ -1256,10 +1300,11 @@ function wordItems(words){
   const list = words
     .filter(w => !q || norm(w.term).includes(q) || norm(w.meaning).includes(q))
     .sort((a, b) => b.createdAt - a.createdAt);
-  if (!words.length && db.settings.currentDeck === 'unknown') return `<li class="empty">모르는 단어가 없어요. 플래시카드에서 '몰라요'를 누르면 여기에 모여요.</li>`;
+  if (!words.length && isUnkScope(db.settings.currentDeck)) return `<li class="empty">모르는 단어가 없어요. 플래시카드에서 '몰라요'를 누르면 여기에 모여요.</li>`;
   if (!words.length) return `<li class="empty"><p>아직 단어가 없어요.</p><p style="margin-top:12px"><button class="btn primary" data-action="add-open">첫 단어 추가</button></p></li>`;
   if (!list.length) return `<li class="empty">'${esc(searchText)}'에 맞는 단어가 없어요.</li>`;
-  const showDeck = (db.settings.currentDeck === 'all' && db.decks.length > 1) || ['multi', 'unknown'].includes(db.settings.currentDeck) || !!groupOf(db.settings.currentDeck);
+  const sc = db.settings.currentDeck, base = isUnkScope(sc) ? unkBase(sc) : sc;
+  const showDeck = (base === 'all' && db.decks.length > 1) || base === 'multi' || !!groupOf(base);
   return list.map(w => `
     <li>
       <div class="body">
@@ -1283,8 +1328,8 @@ function openAddSheet(mode){
   addMode = mode || addMode;
   lastLooked = autoMeaning = autoExample = ''; lookSeq++; pendingAdd = pendingBulk = null;
   const c = db.settings.currentDeck;
-  const grp = groupOf(c);
-  const deckId = grp ? (grp.deckIds[0] || db.decks[0].id) : c === 'all' || c === 'unknown' ? db.decks[0].id : c === 'multi' ? db.settings.selectedDecks[0] : c;
+  const b = isUnkScope(c) ? unkBase(c) : c, grp = groupOf(b);
+  const deckId = grp ? (grp.deckIds[0] || db.decks[0].id) : b === 'all' ? db.decks[0].id : b === 'multi' ? db.settings.selectedDecks[0] : b;
   openSheet(`
     <div class="row split"><h2 style="font-size:20px">단어 추가</h2><button type="button" class="btn ghost" data-action="sheet-close">닫기</button></div>
     <div class="row split">
@@ -1976,21 +2021,22 @@ async function authRun(kind){
 const actions = {
   'tab': a => {
     // 단어장 탭을 다시 누르면 목록으로 돌아감
-    if (a.dataset.view === 'words' && view === 'words') { deckOpen = false; picking = false; deckParent = null; }
+    if (a.dataset.view === 'words' && view === 'words') { deckOpen = false; picking = false; navStack = []; }
     view = a.dataset.view; window.scrollTo(0, 0); render();
   },
   'open-deck': a => {
-    const from = groupOf(db.settings.currentDeck);
-    deckParent = deckOpen && from && !a.dataset.id.startsWith('group:') ? from.id : null;
+    if (deckOpen && view === 'words') { if (db.settings.currentDeck !== a.dataset.id) navStack.push(db.settings.currentDeck); }
+    else navStack = [];
     db.settings.currentDeck = a.dataset.id; deckOpen = true; searchText = '';
     save(); resetSessions(); window.scrollTo(0, 0); render();
   },
   'deck-back': () => {
-    if (deckParent && groupById(deckParent) && db.settings.currentDeck !== 'group:' + deckParent) {
-      db.settings.currentDeck = 'group:' + deckParent; deckParent = null; searchText = '';
+    navStack = navStack.filter(scopeValid);
+    if (navStack.length) {
+      db.settings.currentDeck = navStack.pop(); searchText = '';
       save(); resetSessions(); window.scrollTo(0, 0); render(); return;
     }
-    deckOpen = false; picking = false; deckParent = null; window.scrollTo(0, 0); render();
+    deckOpen = false; picking = false; window.scrollTo(0, 0); render();
   },
   'home-add': () => openSheet(`
     <div class="row split"><h2 style="font-size:20px">만들기</h2><button type="button" class="btn ghost" data-action="sheet-close">닫기</button></div>
@@ -2029,6 +2075,7 @@ const actions = {
   'speak-word': a => { const w = wordById(a.dataset.id); if (w) speakWord(w); },
   'edit-word': a => editSheet(a.dataset.id),
   'sheet-close': () => closeSheet(),
+  'study-unk': () => { opts.fcSource = 'all'; view = 'cards'; window.scrollTo(0, 0); render(); },
   'group-new': () => groupSheet(null),
   'group-edit': a => groupSheet(a.dataset.id),
   'group-delete-ask': () => {

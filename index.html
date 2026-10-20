@@ -1451,15 +1451,17 @@ function viewCards(){
   }
   const w = wordById(s.queue[s.i]);
   if (!w) { s.i++; return viewCards(); }
+  // 예문에는 단어가 들어 있어서 답이 드러나므로, 앞면에는 절대 넣지 않고 뒷면에만 보여 줌
+  const ex = w.example ? `<div class="ex">${esc(w.example)}</div>` : '';
   const termFace = `<div class="big">${esc(w.term)}</div>`;
-  const meaningFace = `<div class="mid">${esc(w.meaning)}</div>${w.example ? `<div class="ex">${esc(w.example)}</div>` : ''}`;
+  const meaningFace = `<div class="mid">${esc(w.meaning)}</div>`;
   const frontIsTerm = opts.fcFront === 'term';
   return `
   <div class="progress"><span class="num">${s.i + 1} / ${s.queue.length}</span><div class="bar"><i style="width:${s.i / s.queue.length * 100}%"></i></div><span class="num">알았어요 ${s.known}</span>${s.queue.length > 10 ? `<button class="linkbtn" data-action="end-early" data-mode="cards">그만하기</button>` : ''}</div>
   <div class="cardwrap" id="cardWrap" tabindex="0" role="button" aria-label="카드 뒤집기">
     <div class="card ${s.flipped ? 'flipped' : ''}" id="card">
       <div class="face front"><div class="head"><span>${frontIsTerm ? '단어' : '뜻'}</span><span>상자 ${w.box}</span></div><div class="content">${frontIsTerm ? termFace : meaningFace}</div></div>
-      <div class="face back"><div class="head"><span>${frontIsTerm ? '뜻' : '단어'}</span><span>상자 ${w.box}</span></div><div class="content">${frontIsTerm ? meaningFace : termFace}</div></div>
+      <div class="face back"><div class="head"><span>${frontIsTerm ? '뜻' : '단어'}</span><span>상자 ${w.box}</span></div><div class="content">${frontIsTerm ? meaningFace : termFace}${ex}</div></div>
     </div>
   </div>
   <div class="row">

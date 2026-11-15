@@ -433,6 +433,30 @@ button,.btn,.choice,.rowname,.term,select,.input{transition:color .2s ease,borde
 .legend{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}
 .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
 .legend i.h1{background:var(--heat1)}.legend i.h2{background:var(--heat2)}.legend i.h3{background:var(--heat3)}
+.srs{gap:12px}
+.srshead{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.srshead h2{font-size:17px}
+.srshead .ok{font-size:13px;font-weight:600;color:var(--good)}
+.srsnums{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.srsnums .stat{background:var(--bg);border-radius:10px;padding:10px 12px}
+.srs.done .hintline{margin:0}
+.face .sub{font-size:14px;color:var(--muted)}
+.srsbtns{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.srsbtns .btn{flex-direction:column;gap:2px;min-height:58px;padding:6px 4px;font-weight:600}
+.srsbtns small{font-size:12px;font-weight:500;color:var(--muted)}
+.srsbtns .r-again{color:var(--bad)}
+.srsbtns .r-again:hover{border-color:var(--bad)}
+.srsbtns .r-good{color:var(--good)}
+.srsbtns .r-good:hover{border-color:var(--good)}
+.row.center{justify-content:center}
+.setrow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.setrow label{font-size:14px}
+.setrow .input{width:96px;text-align:right}
+.upc{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.upd{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
+.upd b{font-size:13px;color:var(--ink)}
+.upd i{display:flex;align-items:flex-end;width:14px;height:52px;background:var(--sunk);border-radius:4px;overflow:hidden}
+.upd u{display:block;width:100%;background:var(--ink);border-radius:4px}
 .keyhint{display:none}
 kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;background:var(--surface);color:var(--ink)}
 @media (hover:hover) and (pointer:fine){.keyhint{display:block}.touchhint{display:none}}
@@ -617,8 +641,128 @@ function sampleData(){
   };
 }
 function validData(d){ return d && Array.isArray(d.decks) && Array.isArray(d.words) && d.decks.length > 0; }
+/* SRS-START ================================================
+   간격 반복 스케줄러 (안키 SM-2 변형). Firebase·화면과 무관한 순수 함수만 있음.
+   나중에 FSRS 같은 다른 방식으로 바꿀 때는 이 블록만 갈아 끼우면 됨.
+   카드 상태: { state: new|learning|review|relearning, due(ms), interval(일), ease, step, reps, lapses, lastReviewedAt }
+   srs.test.js가 이 블록을 잘라 내 시험함
+   ============================================================ */
+const SRS = (() => {
+  const MIN = 60000, HOUR = 3600000, DAY = 86400000;
+  const CFG = {
+    learnSteps: [1, 10],      // 학습 단계(분)
+    relearnSteps: [10],       // 다시 배우기 단계(분)
+    graduate: 1,              // 단계를 다 통과하면 첫 간격(일)
+    easyGraduate: 4,          // 새 카드·학습 중에 '쉬움'이면 바로 이 간격(일)
+    startEase: 2.5, minEase: 1.3,
+    lapseMult: 0.5,           // 복습 카드를 틀리면 간격을 이만큼으로
+    hardMult: 1.2, easyBonus: 1.3,
+    dayStartHour: 4,          // 하루가 바뀌는 시각 (로컬 새벽 4시)
+    learnAhead: 20,           // 할 카드가 없으면 이 시간(분) 안에 돌아올 학습 카드를 당겨서 보여 줌
+  };
+  const RATINGS = ['again', 'hard', 'good', 'easy'];
+
+  // now가 속한 '학습일'이 시작된 시각 (새벽 4시 전이면 전날 4시)
+  function dayStart(now, cfg = CFG){
+    const d = new Date(now);
+    if (d.getHours() < cfg.dayStartHour) d.setDate(d.getDate() - 1);
+    d.setHours(cfg.dayStartHour, 0, 0, 0);
+    return d.getTime();
+  }
+  // 달력 기준으로 n일 뒤 (서머타임이 있어도 같은 시각)
+  function addDays(t, n){ const d = new Date(t); d.setDate(d.getDate() + n); return d.getTime(); }
+  function newCard(cfg = CFG){ return { state: 'new', due: 0, interval: 0, ease: cfg.startEase, step: 0, reps: 0, lapses: 0, lastReviewedAt: 0 }; }
+  // 첫 단계의 '어려움'은 1단계와 2단계의 중간(단계가 하나면 1.5배), 그 뒤로는 지금 단계 반복
+  function hardDelay(steps, i){ return i === 0 ? (steps.length > 1 ? (steps[0] + steps[1]) / 2 : steps[0] * 1.5) : steps[i]; }
+
+  function schedule(card, rating, now, cfg = CFG){
+    if (!RATINGS.includes(rating)) throw new Error('rating: ' + rating);
+    const c = Object.assign(newCard(cfg), card || {});
+    const out = Object.assign({}, c, { reps: c.reps + 1, lastReviewedAt: now });
+    const toReview = days => { out.state = 'review'; out.step = 0; out.interval = days; out.due = addDays(dayStart(now, cfg), days); };
+    const toStep = (steps, i, mins) => { out.step = i; out.due = now + Math.round(mins * MIN); };
+
+    if (c.state !== 'review') {
+      const re = c.state === 'relearning';
+      const steps = re ? cfg.relearnSteps : cfg.learnSteps;
+      const i = Math.min(c.step, steps.length - 1);
+      out.state = re ? 'relearning' : 'learning';
+      if (rating === 'again') toStep(steps, 0, steps[0]);
+      else if (rating === 'hard') toStep(steps, i, hardDelay(steps, i));
+      else if (rating === 'good') {
+        if (i + 1 >= steps.length) toReview(re ? Math.max(1, c.interval) : cfg.graduate);
+        else toStep(steps, i + 1, steps[i + 1]);
+      } else toReview(re ? Math.max(1, c.interval) + 1 : cfg.easyGraduate);
+      return out;
+    }
+
+    const ivl = Math.max(1, c.interval);
+    if (rating === 'again') {
+      out.lapses = c.lapses + 1;
+      out.ease = Math.max(cfg.minEase, round2(c.ease - 0.2));
+      out.interval = Math.max(1, Math.round(ivl * cfg.lapseMult));   // 다시 배운 뒤 쓸 간격
+      out.state = 'relearning';
+      toStep(cfg.relearnSteps, 0, cfg.relearnSteps[0]);
+      return out;
+    }
+    // 어려움 < 알맞음 < 쉬움 순서가 뒤집히지 않게 최소 하루씩 차이를 둠
+    const hard = Math.max(ivl + 1, Math.round(ivl * cfg.hardMult));
+    const good = Math.max(hard + 1, Math.round(ivl * c.ease));
+    const easy = Math.max(good + 1, Math.round(ivl * c.ease * cfg.easyBonus));
+    if (rating === 'hard') { out.ease = Math.max(cfg.minEase, round2(c.ease - 0.15)); toReview(hard); }
+    else if (rating === 'good') toReview(good);
+    else { out.ease = round2(c.ease + 0.15); toReview(easy); }
+    return out;
+  }
+  const round2 = x => Math.round(x * 100) / 100;
+
+  // 버튼별 다음 복습까지 남은 시간(ms). 복습으로 넘어가는 경우는 간격(일) 기준
+  function previewIntervals(card, now, cfg = CFG){
+    const r = {};
+    RATINGS.forEach(k => { const n = schedule(card, k, now, cfg); r[k] = n.state === 'review' ? n.interval * DAY : n.due - now; });
+    return r;
+  }
+  function formatInterval(ms){
+    const trim = x => x.toFixed(1).replace(/\.0$/, '');
+    if (ms < HOUR) return Math.max(1, Math.round(ms / MIN)) + '분';
+    if (ms < DAY) return Math.round(ms / HOUR) + '시간';
+    const d = ms / DAY;
+    if (d < 30) return Math.round(d) + '일';
+    if (d < 365) return trim(d / 30) + '개월';
+    return trim(d / 365) + '년';
+  }
+
+  // 오늘 할 카드. items: [{ id, card(없으면 새 단어) }] 단어 순서대로
+  // limits: { newLeft, reviewLeft } 오늘 남은 새 단어·복습 개수
+  function buildQueue(items, now, limits, cfg = CFG){
+    const ds = dayStart(now, cfg), tomorrow = addDays(ds, 1);
+    const learnDue = [], learnLater = [], review = [], fresh = [];
+    items.forEach(it => {
+      const c = it.card;
+      if (!c || c.state === 'new') fresh.push(it.id);
+      else if (c.state === 'review') { if (c.due <= now) review.push(it); }
+      else if (c.due <= now) learnDue.push(it);
+      else if (c.due < tomorrow) learnLater.push(it);
+    });
+    const byDue = (a, b) => a.card.due - b.card.due;
+    learnDue.sort(byDue); learnLater.sort(byDue); review.sort(byDue);
+    const ahead = learnLater.filter(it => it.card.due - now <= cfg.learnAhead * MIN);
+    return {
+      learn: learnDue.map(it => it.id),
+      review: review.slice(0, Math.max(0, limits.reviewLeft)).map(it => it.id),
+      fresh: fresh.slice(0, Math.max(0, limits.newLeft)),
+      ahead: ahead.map(it => it.id),                     // 할 게 없을 때 당겨 올 학습 카드
+      later: learnLater.length,                          // 오늘 안에 다시 나올 학습 카드 수
+      nextAt: learnLater.length ? learnLater[0].card.due : 0,
+    };
+  }
+  return { CFG, RATINGS, MIN, DAY, dayStart, addDays, newCard, schedule, previewIntervals, formatInterval, buildQueue };
+})();
+/* SRS-END */
+
 function fillDefaults(d){
-  d.settings = Object.assign({ lang: 'en-US', rate: 0.9, currentDeck: 'all' }, d.settings || {});
+  d.settings = Object.assign({ lang: 'en-US', rate: 0.9, currentDeck: 'all', newPerDay: 20, revPerDay: 200, srsDir: 'term' }, d.settings || {});
+  if (!Array.isArray(d.cardStates)) d.cardStates = [];
   if (!Array.isArray(d.groups)) d.groups = [];
   if (!Array.isArray(d.days)) d.days = [];
   d.groups.forEach(g => {
@@ -675,13 +819,17 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) flush
    여기서는 어댑터가 넘겨주는 함수만 씁니다.
    ============================================================ */
 const LINK_KEY = 'vocab-sync-uid';
-const KINDS = ['decks', 'words', 'groups', 'days'];
+const KINDS = ['decks', 'words', 'groups', 'days', 'cardStates'];
+// 없어도 단어 동기화에는 지장 없는 목록: 서버가 거부하면 이 기기에만 두고 나머지는 계속 동기화
+const OPTIONAL_KINDS = ['days', 'cardStates'];
+// cardStates: 간격 반복 학습 상태. 문서 id = 단어 id. 새 단어는 문서가 없고 처음 채점할 때 생김
+const CARD_KEYS = ['state', 'due', 'interval', 'ease', 'step', 'reps', 'lapses', 'lastReviewedAt', 'firstAt', 'updatedAt'];
 // days: 날짜별 학습 기록. 문서 id가 날짜(2026-11-15), 모드별 푼 문제 수를 담음
-const DAY_KEYS = ['cards', 'dict', 'mean', 'quiz', 'updatedAt'];
+const DAY_KEYS = ['cards', 'dict', 'mean', 'quiz', 'srs', 'srsNew', 'srsOk', 'updatedAt'];
 const DECK_KEYS = ['name', 'lang', 'createdAt', 'updatedAt'];
 const GROUP_KEYS = ['name', 'examDate', 'deckIds', 'createdAt', 'updatedAt'];
 const WORD_KEYS = ['deckId', 'term', 'meaning', 'example', 'box', 'nextReview', 'correct', 'wrong', 'unknown', 'createdAt', 'updatedAt'];
-const pickDoc = (kind, o) => { const keys = kind === 'decks' ? DECK_KEYS : kind === 'groups' ? GROUP_KEYS : kind === 'days' ? DAY_KEYS : WORD_KEYS; const r = {}; keys.forEach(k => { if (o[k] !== undefined) r[k] = o[k]; }); return r; };
+const pickDoc = (kind, o) => { const keys = kind === 'decks' ? DECK_KEYS : kind === 'groups' ? GROUP_KEYS : kind === 'days' ? DAY_KEYS : kind === 'cardStates' ? CARD_KEYS : WORD_KEYS; const r = {}; keys.forEach(k => { if (o[k] !== undefined) r[k] = o[k]; }); return r; };
 const docKey = (kind, id) => kind + '/' + id;
 function lsGet(k){ try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v){ try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
@@ -694,9 +842,9 @@ const Sync = {
   phase: 'off',             // off | waiting(서버 첫 응답 기다림) | choose(합치기 질문 중) | live
   mode: null,               // 'first'(이 기기 첫 연결) | 'resume'(이미 연결된 기기)
   synced: new Map(),        // 서버와 맞춘 상태: 'words/id' → JSON
-  remote: { decks: new Map(), words: new Map(), groups: new Map(), days: new Map() },   // 서버(와 Firestore 캐시)가 보는 상태
-  daysOff: false,           // 서버가 학습 기록 저장을 거부하면 기록만 이 기기에 두고 나머지 동기화는 계속
-  seen: { decks: null, words: null, groups: null, days: null }, // 받은 스냅샷: null | 'cache' | 'server'
+  remote: Object.fromEntries(KINDS.map(k => [k, new Map()])),   // 서버(와 Firestore 캐시)가 보는 상태
+  off: {},                  // OPTIONAL_KINDS 중 서버가 거부한 목록 (이 기기에만 둠)
+  seen: Object.fromEntries(KINDS.map(k => [k, null])), // 받은 스냅샷: null | 'cache' | 'server'
   cacheUsable: null,        // resume: 기기 저장소만으로 시작해도 되는지
   baseline: null,           // resume: 시작 때 localStorage에 있던 상태 (그사이 바뀐 것을 찾기 위함)
   unsub: [],
@@ -728,24 +876,25 @@ const Sync = {
     this.unsub.forEach(f => { try { f(); } catch (e) {} });
     this.unsub = []; this.stamp++;
     this.phase = 'off'; this.synced = new Map(); this.baseline = null;
-    this.remote = { decks: new Map(), words: new Map(), groups: new Map(), days: new Map() };
-    this.seen = { decks: null, words: null, groups: null, days: null };
-    this.daysOff = false;
+    this.remote = Object.fromEntries(KINDS.map(k => [k, new Map()]));
+    this.seen = Object.fromEntries(KINDS.map(k => [k, null]));
+    this.off = {};
     this.cacheUsable = null;
   },
   start(){
     const stamp = this.stamp, uid = this.user.uid;
     KINDS.forEach(kind => {
-      const offDays = err => { this.daysOff = true; console.warn('study log sync off', err); this.onSnap('days', { fromCache: false, changes: [] }); };
+      const optional = OPTIONAL_KINDS.includes(kind);
+      const offKind = err => { this.off[kind] = true; console.warn(kind + ' sync off', err); this.onSnap(kind, { fromCache: false, changes: [] }); };
       try { this.unsub.push(this.adapter.listen(uid, kind,
         snap => { if (stamp === this.stamp) this.onSnap(kind, snap); },
         err => {
           if (stamp !== this.stamp) return;
           // 학습 기록은 없어도 되는 정보: 이 목록만 막혀 있으면 빈 것으로 치고 단어 동기화는 그대로 진행
-          if (kind === 'days') { offDays(err); return; }
+          if (optional) { offKind(err); return; }
           this.fail(err);
         })); }
-      catch (err) { if (kind === 'days') setTimeout(() => { if (stamp === this.stamp) offDays(err); }, 0); else throw err; }
+      catch (err) { if (optional) setTimeout(() => { if (stamp === this.stamp) offKind(err); }, 0); else throw err; }
     });
   },
 
@@ -775,7 +924,7 @@ const Sync = {
   },
   applyChanges(kind, changes){
     flushSave();   // 아직 안 올린 이 기기 변경이 덮이지 않게 먼저 올림
-    let dirty = false;
+    let dirty = false, repush = false;
     if (!db[kind]) db[kind] = [];
     const list = db[kind];
     changes.forEach(c => {
@@ -791,11 +940,14 @@ const Sync = {
       const local = idx >= 0 ? JSON.stringify(pickDoc(kind, list[idx])) : null;
       this.synced.set(key, json);
       if (json === local) return;
+      // 학습 상태: 이 기기 쪽이 더 나중에 채점됐으면 이 기기 것을 남기고 다시 올림
+      if (kind === 'cardStates' && idx >= 0 && (list[idx].updatedAt || 0) > (c.data.updatedAt || 0)) { repush = true; return; }
       const item = Object.assign({ id: c.id }, pickDoc(kind, c.data));
       if (idx >= 0) list[idx] = item; else list.push(item);
       dirty = true;
     });
     if (dirty) afterRemoteData();
+    if (repush) this.push();
   },
 
   /* 이 기기를 처음 계정에 연결할 때 */
@@ -863,6 +1015,7 @@ const Sync = {
     if (!db.decks.length) db.decks.push({ id: uid(), name: '내 단어장', lang: 'en-US', createdAt: Date.now(), updatedAt: Date.now() });
     afterRemoteData();
     this.push();
+    ReviewLog.flush();
     this.changed(true);
   },
 
@@ -874,13 +1027,13 @@ const Sync = {
     now.forEach((json, key) => {
       if (this.synced.get(key) === json) return;
       const [kind, id] = key.split('/');
-      if (kind === 'days' && this.daysOff) return;
+      if (this.off[kind]) return;
       ops.push({ kind, id, data: JSON.parse(json) });
     });
     this.synced.forEach((json, key) => {
       if (now.has(key)) return;
       const [kind, id] = key.split('/');
-      if (kind === 'days' && this.daysOff) return;
+      if (this.off[kind]) return;
       ops.push({ kind, id, data: null });
     });
     if (!ops.length) return;
@@ -924,7 +1077,7 @@ const Sync = {
   }
 };
 window.VocabSync = Sync;
-window.addEventListener('online', () => { Sync.online = true; Sync.changed(); });
+window.addEventListener('online', () => { Sync.online = true; Sync.changed(); ReviewLog.flush(); });
 window.addEventListener('offline', () => { Sync.online = false; Sync.changed(); });
 if (Sync.configured) setTimeout(() => { if (!Sync.adapter && !Sync.loadFailed) Sync.failed(); }, 20000);
 
@@ -1032,7 +1185,7 @@ function nextLabel(w){
 // 날짜 키: 이 기기 시간 기준 2026-11-15
 function dayKey(d = new Date()){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 const dayById = id => (db.days || []).find(x => x.id === id);
-const dayTotal = d => d ? (d.cards || 0) + (d.dict || 0) + (d.mean || 0) + (d.quiz || 0) : 0;
+const dayTotal = d => d ? (d.cards || 0) + (d.dict || 0) + (d.mean || 0) + (d.quiz || 0) + (d.srs || 0) : 0;
 function logStudy(mode){
   const id = dayKey(); let d = dayById(id);
   if (!d) { d = { id }; db.days.push(d); }
@@ -1253,7 +1406,7 @@ const sorters = {
   meaning: (a, b) => a.meaning.localeCompare(b.meaning, 'ko'),
   wrong: (a, b) => (b.wrong || 0) - (a.wrong || 0) || b.createdAt - a.createdAt,
 };
-const sessions = { cards: null, dict: null, mean: null, quiz: null };
+const sessions = { cards: null, dict: null, mean: null, quiz: null, review: null };
 const opts = { fcSource: 'all', fcFront: 'term', qzDir: 't2m' };
 // 모드별 문제 수: 숫자 또는 'all'(전체). 기기마다 기억함
 const COUNT_DEFAULT = { cards: 30, dict: 10, mean: 10, quiz: 10 };
@@ -1286,15 +1439,15 @@ function pickFor(mode, words, onlyDue){
   if (n >= pool.length) return shuffle(pool).map(w => w.id);
   return pickSession(pool, n, false);
 }
-function resetSessions(){ sessions.cards = sessions.dict = sessions.mean = sessions.quiz = null; }
+function resetSessions(){ sessions.cards = sessions.dict = sessions.mean = sessions.quiz = sessions.review = null; }
 
 /* ---------- 공통 렌더 ---------- */
 function render(){
-  const tabOf = MODES[view] ? 'study' : view;
+  const tabOf = MODES[view] || view === 'review' ? 'study' : view;
   document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.view === tabOf ? 'page' : 'false'));
   const v = $('view');
-  v.innerHTML = (MODES[view] ? `<div class="backbar"><button class="btn ghost" data-action="tab" data-view="study">${CHEV.replace('class="chev"', 'style="width:18px;height:18px;transform:scaleX(-1)"')}학습</button><span class="scopetag">${esc(scopeName(db.settings.currentDeck))}</span></div>` : '')
-    + ({ words: () => deckOpen ? viewWords() : viewDeckList(), study: viewStudy, cal: viewCal, cards: viewCards, dict: viewDict, mean: viewMean, quiz: viewQuiz, settings: viewSettings })[view]();
+  v.innerHTML = (MODES[view] || view === 'review' ? `<div class="backbar"><button class="btn ghost" data-action="tab" data-view="study">${CHEV.replace('class="chev"', 'style="width:18px;height:18px;transform:scaleX(-1)"')}학습</button><span class="scopetag">${esc(scopeName(db.settings.currentDeck))}</span></div>` : '')
+    + ({ words: () => deckOpen ? viewWords() : viewDeckList(), study: viewStudy, cal: viewCal, review: viewReview, cards: viewCards, dict: viewDict, mean: viewMean, quiz: viewQuiz, settings: viewSettings })[view]();
   if (view === 'cards') bindCard();
   if (view === 'dict') { const inp = $('dictInput'); if (inp && !sessions.dict?.answered) inp.focus({ preventScroll: true }); }
   if (view === 'mean') { const inp = $('meanInput'); if (inp && !sessions.mean?.answered) inp.focus({ preventScroll: true }); }
@@ -1571,6 +1724,183 @@ function editSheet(id){
 }
 
 /* ============ 2. 플래시카드 ============ */
+
+/* ---------- 오늘의 복습 (간격 반복) ---------- */
+const cardState = id => db.cardStates.find(c => c.id === id);
+function srsLimits(now){
+  const ds = SRS.dayStart(now);
+  let newDone = 0, revDone = 0;
+  db.cardStates.forEach(c => {
+    if ((c.firstAt || 0) >= ds) newDone++;
+    else if ((c.lastReviewedAt || 0) >= ds) revDone++;
+  });
+  return { newLeft: db.settings.newPerDay - newDone, reviewLeft: db.settings.revPerDay - revDone };
+}
+function srsQueue(now = Date.now()){
+  const map = new Map(db.cardStates.map(c => [c.id, c]));
+  const items = currentWords().slice().sort((a, b) => a.createdAt - b.createdAt).map(w => ({ id: w.id, card: map.get(w.id) }));
+  return SRS.buildQueue(items, now, srsLimits(now));
+}
+// 지금 보여 줄 카드: 학습 중(때가 된 것) → 오늘 복습 → 새 단어 → 곧 돌아올 학습 카드
+function srsNext(q){ return q.learn[0] || q.review[0] || q.fresh[0] || q.ahead[0] || null; }
+const srsLeft = q => q.learn.length + q.review.length + q.fresh.length;
+const SRS_NAMES = { again: '다시', hard: '어려움', good: '알맞음', easy: '쉬움' };
+const SRS_STATE = { new: '새 단어', learning: '학습 중', relearning: '다시 배우기', review: '복습' };
+function reviewCard(){
+  const words = currentWords();
+  if (!words.length) return '';
+  const now = Date.now(), q = srsQueue(now);
+  const learn = q.learn.length + q.later;
+  if (!srsLeft(q) && !q.ahead.length) {
+    const t0 = SRS.addDays(SRS.dayStart(now), 1), t1 = SRS.addDays(t0, 1);
+    const ids = new Set(words.map(w => w.id));
+    const tomorrow = db.cardStates.filter(c => ids.has(c.id) && c.state === 'review' && c.due >= t0 && c.due < t1).length;
+    return `<section class="panel srs done">
+      <div class="srshead"><h2>오늘의 복습</h2><span class="ok">오늘 복습 완료</span></div>
+      <p class="hintline">${q.later ? `학습 중 카드 <b class="num">${q.later}</b>개가 ${SRS.formatInterval(q.nextAt - now)} 뒤에 다시 나와요 · ` : ''}내일 예정 <b class="num">${tomorrow}</b>개</p>
+    </section>`;
+  }
+  return `<section class="panel srs">
+    <div class="srshead"><h2>오늘의 복습</h2></div>
+    <div class="srsnums">
+      <div class="stat"><b class="num">${q.fresh.length}</b><span>새 단어</span></div>
+      <div class="stat"><b class="num">${learn}</b><span>학습 중</span></div>
+      <div class="stat"><b class="num">${q.review.length}</b><span>복습</span></div>
+    </div>
+    <button class="btn primary wide" data-action="srs-start">${sessions.review && sessions.review.done ? '이어서 하기' : '시작하기'}</button>
+  </section>`;
+}
+function viewReview(){
+  const now = Date.now();
+  let s = sessions.review;
+  if (!s) s = sessions.review = { done: 0, cur: null, stamp: 0, flipped: false, undo: null };
+  const q = srsQueue(now);
+  // 지금 카드가 다른 기기에서 채점됐거나, 지워졌거나, 범위를 벗어났으면 다음 카드로
+  if (s.cur) {
+    const st = cardState(s.cur);
+    const inScope = currentWords().some(w => w.id === s.cur);
+    if (!inScope || (st ? st.updatedAt : 0) !== s.stamp) { s.cur = null; s.flipped = false; }
+  }
+  if (!s.cur) {
+    s.cur = srsNext(q); s.flipped = false;
+    const st = s.cur && cardState(s.cur); s.stamp = st ? st.updatedAt : 0;
+  }
+  const left = srsLeft(q) + (s.cur && ![...q.learn, ...q.review, ...q.fresh].includes(s.cur) ? 1 : 0);
+  const total = s.done + left;
+  const undoBtn = s.undo ? `<button class="linkbtn" data-action="srs-undo">되돌리기</button>` : '';
+  if (!s.cur) {
+    return `<div class="progress"><span class="num">${s.done} / ${s.done}</span><div class="bar"><i style="width:100%"></i></div>${undoBtn}</div>
+    <section class="panel result">
+      <h2>오늘 복습 완료</h2>
+      <p class="muted">${s.done ? `이번에 <b class="num">${s.done}</b>장을 봤어요.` : '지금 할 카드가 없어요.'}${q.later ? ` 학습 중 카드 <b class="num">${q.later}</b>개가 ${SRS.formatInterval(q.nextAt - now)} 뒤에 다시 나와요.` : ''}</p>
+      <div class="row end"><button class="btn primary" data-action="tab" data-view="study">학습으로</button></div>
+    </section>`;
+  }
+  const w = wordById(s.cur), st = cardState(s.cur);
+  const termFirst = db.settings.srsDir !== 'meaning';
+  const termFace = `<div class="big">${esc(w.term)}</div>`, meaningFace = `<div class="mid">${esc(w.meaning)}</div>`;
+  const ex = w.example ? `<div class="ex">${esc(w.example)}</div>` : '';
+  const label = SRS_STATE[st ? st.state : 'new'];
+  const pv = SRS.previewIntervals(st || null, now);
+  return `
+  <div class="progress"><span class="num">${s.done} / ${total}</span><div class="bar"><i style="width:${total ? s.done / total * 100 : 0}%"></i></div>${undoBtn}</div>
+  <div class="cardwrap" id="srsWrap" ${s.flipped ? '' : 'data-action="srs-show" role="button" tabindex="0" aria-label="정답 보기"'}>
+    <div class="card ${s.flipped ? 'flipped' : ''}">
+      <div class="face front"><div class="head"><span>${termFirst ? '단어' : '뜻'}</span><span>${label}</span></div><div class="content">${termFirst ? termFace : meaningFace}</div></div>
+      <div class="face back"><div class="head"><span>${termFirst ? '뜻' : '단어'}</span><span>${label}</span></div><div class="content">${termFirst ? meaningFace + `<div class="sub">${esc(w.term)}</div>` : termFace + `<div class="sub">${esc(w.meaning)}</div>`}${ex}</div></div>
+    </div>
+  </div>
+  ${s.flipped ? `<div class="srsbtns">${SRS.RATINGS.map((r, i) => `<button class="btn r-${r}" data-action="srs-grade" data-r="${r}"><small class="num">${SRS.formatInterval(pv[r])}</small>${SRS_NAMES[r]}</button>`).join('')}</div>
+    <div class="row center"><button class="btn ghost" data-action="srs-speak" aria-label="발음 듣기">${ICON.speaker} 발음</button></div>`
+  : `<div class="row"><button class="btn" data-action="srs-speak" aria-label="발음 듣기">${ICON.speaker}</button><button class="btn primary wide" data-action="srs-show">정답 보기</button></div>`}
+  <p class="hint keyhint"><kbd>Space</kbd> 정답 보기 · <kbd>1</kbd>~<kbd>4</kbd> 채점</p>`;
+}
+
+/* ---------- 채점 기록 (reviewLogs) ----------
+   복습 화면에서 채점할 때마다 한 줄씩 users/{uid}/reviewLogs/{단어id_시각}에 쌓음.
+   나중에 FSRS로 바꿀 때 쓰려는 기록이라 앱은 이 목록을 읽지 않음(리스너 없음, 읽기 용량 안 씀).
+   보낼 기록은 먼저 이 기기에 모아 두고(오프라인·로그인 전 대비), 연결되면 올린 뒤 지움.
+   문서 id가 정해져 있어 같은 기록을 두 번 보내도 한 줄로 남음. 되돌리기 한 채점은 기록에서도 지움. */
+const ReviewLog = {
+  KEY: 'vocab-log-outbox',
+  MAX: 5000,                 // 오래 못 보내도 이 기기 저장 공간이 넘치지 않게
+  box: null, busy: false,
+  load(){ if (!this.box) { try { this.box = JSON.parse(lsGet(this.KEY) || '[]'); } catch (e) { this.box = []; } if (!Array.isArray(this.box)) this.box = []; } return this.box; },
+  keep(){ lsSet(this.KEY, this.box.length ? JSON.stringify(this.box) : null); },
+  add(id, data){
+    if (!Sync.configured) return;          // 계정 연결 없이 쓰는 앱이면 쌓지 않음
+    const b = this.load();
+    b.push({ id, data });
+    if (b.length > this.MAX) b.splice(0, b.length - this.MAX);
+    this.keep(); this.flush();
+  },
+  remove(id){
+    const b = this.load(), i = b.findIndex(x => x.id === id && x.data);
+    // 아직 안 보낸 기록이면 그냥 빼고, 이미 보냈으면 지우기를 보냄
+    if (i >= 0) { b.splice(i, 1); this.keep(); } else this.add(id, null);
+  },
+  flush(){
+    const b = this.load();
+    if (this.busy || !b.length || Sync.phase !== 'live' || !Sync.adapter || !Sync.user) return;
+    const sent = b.slice(0, 400);
+    this.busy = true;
+    Sync.adapter.commit(Sync.user.uid, sent.map(x => ({ kind: 'reviewLogs', id: x.id, data: x.data })))
+      .then(() => { this.box = this.load().filter(x => !sent.includes(x)); this.keep(); this.busy = false; if (this.box.length) this.flush(); })
+      .catch(err => { this.busy = false; console.warn('review log upload failed (will retry later)', err); });
+  },
+};
+function srsGrade(rating){
+  const s = sessions.review; if (!s || !s.cur || !s.flipped) return;
+  const id = s.cur, now = Date.now();
+  const prev = cardState(id), before = prev ? Object.assign({}, prev) : null;
+  const next = Object.assign(SRS.schedule(prev ? pickDoc('cardStates', prev) : null, rating, now), { id, firstAt: prev ? (prev.firstAt || now) : now, updatedAt: now });
+  if (prev) Object.assign(prev, next); else db.cardStates.push(next);
+  // 학습 기록(달력): 본 카드 수, 처음 본 단어 수, 맞힌 수
+  const dk = dayKey(); let d = dayById(dk); if (!d) { d = { id: dk }; db.days.push(d); }
+  const inc = (k, n) => { d[k] = (d[k] || 0) + n; };
+  inc('srs', 1); if (!prev) inc('srsNew', 1); if (rating !== 'again') inc('srsOk', 1); d.updatedAt = now;
+  const was = before || SRS.newCard();
+  const logId = id + '_' + now;
+  ReviewLog.add(logId, {
+    wordId: id, rating, reviewedAt: now,
+    prevState: was.state, state: next.state,
+    prevInterval: was.interval || 0, interval: next.interval,
+    prevEase: was.ease, ease: next.ease,
+    prevDue: was.due || 0, due: next.due,
+    lastReviewedAt: was.lastReviewedAt || 0,
+  });
+  s.undo = { id, before, dk, isNew: !prev, ok: rating !== 'again', logId };
+  s.done++; s.cur = null; s.flipped = false;
+  save(); render();
+}
+function srsUndo(){
+  const s = sessions.review; if (!s || !s.undo) return;
+  const u = s.undo, now = Date.now();
+  if (u.before) Object.assign(cardState(u.id) || {}, u.before, { updatedAt: now });
+  else db.cardStates = db.cardStates.filter(c => c.id !== u.id);
+  if (u.before && !cardState(u.id)) db.cardStates.push(Object.assign({}, u.before, { updatedAt: now }));
+  const d = dayById(u.dk);
+  if (d) { const dec = k => { if (d[k]) d[k]--; if (!d[k]) delete d[k]; }; dec('srs'); if (u.isNew) dec('srsNew'); if (u.ok) dec('srsOk'); d.updatedAt = now; }
+  if (u.logId) ReviewLog.remove(u.logId);
+  s.done = Math.max(0, s.done - 1); s.undo = null;
+  s.cur = u.id; s.flipped = true;
+  const st = cardState(u.id); s.stamp = st ? st.updatedAt : 0;
+  save(); render(); toast('되돌렸어요');
+}
+// 앞으로 7일 동안 날마다 복습할 카드 수 (오늘 칸에는 밀린 것과 오늘 학습 중인 것 포함)
+function upcoming(){
+  const now = Date.now(), ds = SRS.dayStart(now), out = [];
+  const starts = Array.from({ length: 8 }, (_, i) => SRS.addDays(ds, i));
+  const live = new Set(db.words.map(w => w.id));
+  for (let i = 0; i < 7; i++) out.push({ t: starts[i], n: 0 });
+  db.cardStates.forEach(c => {
+    if (!live.has(c.id) || c.state === 'new') return;
+    const i = c.due < starts[1] ? 0 : starts.findIndex((t, j) => j < 7 && c.due >= t && c.due < starts[j + 1]);
+    if (i >= 0) out[i].n++;
+  });
+  return out;
+}
+
 // 학습 탭: 네 가지 모드를 고르는 화면
 const MODES = {
   cards: { name: '플래시카드', desc: '카드를 넘기며 아는지 확인', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="14" height="14" rx="2"/><path d="M7 3h12a2 2 0 0 1 2 2v12"/></svg>' },
@@ -1619,7 +1949,7 @@ function calendar(){
   const pd = pick && dayById(pick), st = streak();
   const detail = pick
     ? `<b>${Number(pick.slice(5, 7))}월 ${Number(pick.slice(8))}일</b> ` + (dayTotal(pd)
-        ? Object.keys(MODES).filter(k => pd[k]).map(k => `${MODES[k].name} <span class="num">${pd[k]}</span>`).join(' · ')
+        ? [['srs', '복습'], ...Object.entries(MODES).map(([k, m]) => [k, m.name])].filter(([k]) => pd[k]).map(([k, n]) => `${n} <span class="num">${pd[k]}</span>`).join(' · ')
         : '학습 기록이 없어요')
     : '날짜를 누르면 그날 한 학습이 나와요';
   return `<section class="calstats">
@@ -1641,12 +1971,21 @@ function calendar(){
 }
 // 하루 푼 문제 수 → 진하기 1~3
 const heat = n => n >= 30 ? 3 : n >= 10 ? 2 : 1;
-function viewCal(){ return `<div class="deckhead"><h2>학습 달력</h2></div>` + calendar(); }
+function viewCal(){ return `<div class="deckhead"><h2>학습 달력</h2></div>` + calendar() + upcomingPanel(); }
+function upcomingPanel(){
+  const days = upcoming(), max = Math.max(1, ...days.map(d => d.n));
+  if (!days.some(d => d.n) && !db.cardStates.length) return '';
+  const wk = ['일', '월', '화', '수', '목', '금', '토'];
+  return `<section class="panel"><h3>앞으로 7일 복습 예정</h3>
+    <div class="upc">${days.map((d, i) => `<div class="upd"><b class="num">${d.n}</b><i><u style="height:${d.n / max * 100}%"></u></i><span>${i === 0 ? '오늘' : i === 1 ? '내일' : wk[new Date(d.t).getDay()]}</span></div>`).join('')}</div>
+  </section>`;
+}
 function viewStudy(){
   const words = currentWords();
   if (!words.length) return scopeBar(words) + emptyState('이 범위에는 아직 단어가 없어요.');
   const due = words.filter(isDue).length, unk = words.filter(w => w.unknown).length;
   return `${scopeBar(words)}
+  ${reviewCard()}
   <ul class="rows">${Object.entries(MODES).map(([k, m]) => `<li><button class="rowbtn" data-action="tab" data-view="${k}">
     <span class="rowicon mode m-${k}" aria-hidden="true">${m.icon}</span>
     <span class="rowmain"><span class="rowname">${m.name}${sessionLive(k) ? '<span class="live">진행 중</span>' : ''}</span><span class="rowmeta"><span>${m.desc}</span></span></span>${CHEV}
@@ -2187,6 +2526,18 @@ function viewSettings(){
   </section>
 
   <section class="panel">
+    <h3>오늘의 복습</h3>
+    <div class="setrow"><label for="srsNewIn">하루 새 단어 수</label><input class="input num" type="number" id="srsNewIn" min="0" max="999" inputmode="numeric" value="${db.settings.newPerDay}"></div>
+    <div class="setrow"><label for="srsRevIn">하루 복습 수</label><input class="input num" type="number" id="srsRevIn" min="0" max="9999" inputmode="numeric" value="${db.settings.revPerDay}"></div>
+    <div class="setrow"><label>카드 방향</label>
+      <div class="seg">
+        <button data-action="srs-dir" data-val="term" aria-pressed="${db.settings.srsDir !== 'meaning'}">단어 → 뜻</button>
+        <button data-action="srs-dir" data-val="meaning" aria-pressed="${db.settings.srsDir === 'meaning'}">뜻 → 단어</button>
+      </div></div>
+    <p class="hintline">이 설정은 기기마다 따로 저장돼요.</p>
+  </section>
+
+  <section class="panel">
     <h3>발음</h3>
     <p class="muted" style="font-size:13px">발음 언어와 뜻 찾기 언어는 위의 단어장마다 정해요.</p>
     <div class="field"><label for="rateIn">말하기 속도 <span class="num" id="rateOut">${db.settings.rate.toFixed(2)}</span></label>
@@ -2278,6 +2629,12 @@ const actions = {
     </ul>`, true),
   'cal-move': a => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + Number(a.dataset.d), 1); calPick = null; render(); },
   'cal-pick': a => { calPick = calPick === a.dataset.id ? null : a.dataset.id; render(); },
+  'srs-start': () => { view = 'review'; window.scrollTo(0, 0); render(); },
+  'srs-show': () => { const s = sessions.review; if (s && s.cur && !s.flipped) { s.flipped = true; render(); } },
+  'srs-grade': a => srsGrade(a.dataset.r),
+  'srs-undo': () => srsUndo(),
+  'srs-speak': () => { const s = sessions.review, w = s && wordById(s.cur); if (w) speakWord(w); },
+  'srs-dir': a => { db.settings.srsDir = a.dataset.val; save(); render(); },
   'scope-open': () => scopeSheet(),
   'scope-pick': a => { db.settings.currentDeck = a.dataset.id; navStack = []; searchText = ''; save(); resetSessions(); closeSheet(); render(); },
   'word-filter': a => { wordFilter = a.dataset.f; render(); },
@@ -2376,10 +2733,12 @@ const actions = {
     const id = $('editForm').dataset.id;
     const i = db.words.findIndex(w => w.id === id); if (i < 0) return;
     const [w] = db.words.splice(i, 1);
+    const st = cardState(id); if (st) db.cardStates = db.cardStates.filter(c => c !== st);
     save(); closeSheet(); resetSessions(); render();
     toast(`'${w.term}'을(를) 삭제했어요`, 6000, () => {
       if (wordById(w.id) || !deckById(w.deckId)) return;
       w.updatedAt = Date.now(); db.words.push(w);
+      if (st && !cardState(w.id)) { st.updatedAt = Date.now(); db.cardStates.push(st); }
       save(); resetSessions(); render(); toast('되돌렸어요');
     });
   },
@@ -2541,6 +2900,9 @@ const actions = {
     const inGroups = db.groups.filter(g => g.deckIds.includes(id)).map(g => g.id);
     db.decks = db.decks.filter(d => d.id !== id);
     db.words = db.words.filter(w => w.deckId !== id);
+    const goneIds = new Set(gone.map(w => w.id));
+    const goneStates = db.cardStates.filter(c => goneIds.has(c.id));
+    db.cardStates = db.cardStates.filter(c => !goneIds.has(c.id));
     if (db.settings.currentDeck === id) db.settings.currentDeck = 'all';
     fillDefaults(db); picked.delete(id);
     save(); closeSheet(); resetSessions(); render();
@@ -2549,6 +2911,7 @@ const actions = {
       const now = Date.now();
       deck.updatedAt = now; db.decks.push(deck);
       gone.forEach(w => { w.updatedAt = now; db.words.push(w); });
+      goneStates.forEach(c => { if (!cardState(c.id)) { c.updatedAt = now; db.cardStates.push(c); } });
       inGroups.forEach(gid => { const g = groupById(gid); if (g && !g.deckIds.includes(deck.id)) { g.deckIds.push(deck.id); g.updatedAt = now; } });
       save(); resetSessions(); render(); toast('되돌렸어요');
     });
@@ -2712,6 +3075,12 @@ document.addEventListener('change', e => {
     if (e.target.id !== 'csvName') renderCsvSheet();
     return;
   }
+  if (e.target.id === 'srsNewIn' || e.target.id === 'srsRevIn') {
+    const k = e.target.id === 'srsNewIn' ? 'newPerDay' : 'revPerDay';
+    const n = Math.floor(Number(e.target.value));
+    if (Number.isFinite(n) && n >= 0) { db.settings[k] = Math.min(n, Number(e.target.max)); save(); toast('저장했어요'); }
+    e.target.value = db.settings[k]; return;
+  }
   if (e.target.id === 'wordSort') { db.settings.wordSort = e.target.value; save(); $('wordList').innerHTML = wordItems(currentWords()); }
   if (e.target.classList.contains('decklang')) { const d = deckById(e.target.dataset.id); if (d) { d.lang = e.target.value; d.updatedAt = Date.now(); save(); toast(`'${d.name}' 언어를 바꿨어요`); } }
   if (e.target.id === 'fDeck') { lastLooked = ''; syncAddLang(); }
@@ -2746,6 +3115,13 @@ document.addEventListener('keydown', e => {
     // 시작 화면과 결과 화면: 엔터로 바로 시작
     const go = $('view').querySelector('.btn.primary:not(:disabled)');
     if (go && !sessionLive(view)) { e.preventDefault(); go.click(); return; }
+  }
+  if (view === 'review' && sessions.review && sessions.review.cur) {
+    const s = sessions.review;
+    if ((e.key === ' ' || e.key === 'Enter') && !s.flipped) { e.preventDefault(); actions['srs-show'](); return; }
+    const n = Number(e.key);
+    if (s.flipped && n >= 1 && n <= 4) { e.preventDefault(); srsGrade(SRS.RATINGS[n - 1]); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); srsUndo(); return; }
   }
   if (view === 'cards' && sessions.cards && sessions.cards.i < sessions.cards.queue.length) {
     if (e.key === 'ArrowRight') answerCard(true);

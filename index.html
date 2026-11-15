@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#ECEFF2" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#10151B" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#FBFBFA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#151614" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
@@ -19,30 +19,39 @@
 <style>
 /* Layout: 한 손 모바일 앱. 위 고정 헤더(단어장 선택) + 아래 고정 탭 4개, 학습 카드는 줄 쳐진 인덱스 카드. */
 :root{
-  --bg:#ECEFF2; --surface:#FFFFFF; --sunk:#E1E6EB; --ink:#16202B; --muted:#5A6573; --line:#D2D9E0;
-  --accent:#2B4FD8; --accent-ink:#FFFFFF; --accent-soft:#DCE3FB;
-  --mark:#FFE36A; --rule:#C9D7F2; --margin:#E07070;
-  --good:#17865A; --good-soft:#D8F0E4; --bad:#C23E2C; --bad-soft:#F8DEDA;
-  --shadow:0 1px 2px rgba(22,32,43,.06),0 6px 18px rgba(22,32,43,.07);
+  --bg:#FBFBFA; --surface:#FFFFFF; --sunk:#F1F0ED; --ink:#1C1D1A; --muted:#6B6A66; --line:#E7E6E1;
+  --accent:#1C1D1A; --accent-ink:#FFFFFF; --accent-soft:#EDECE8;
+  --pop:#1C1D1A; --pop-ink:#FFFFFF; --pop-soft:#EDECE8; --pop-text:#1C1D1A;
+  --heat1:#E4E2DC; --heat2:#9A988F; --heat3:#1C1D1A; --heat-ink:#FFFFFF;
+  --t1:#FFE4D6; --t1i:#C2502A; --t2:#DCEAFF; --t2i:#2D62BE; --t3:#D8F2E4; --t3i:#1B8053; --t4:#E9E2FB; --t4i:#6648C0;
+  --mark:#FFE08A; --rule:#ECEAE3; --margin:#DB9383;
+  --good:#1F8A5B; --good-soft:#DDF0E6; --bad:#B4432F; --bad-soft:#F6E1DB;
+  --shadow:0 1px 2px rgba(40,36,28,.05),0 6px 18px rgba(40,36,28,.06);
   --f-display:'Bricolage Grotesque','IBM Plex Sans KR',system-ui,sans-serif;
   --f-body:'IBM Plex Sans KR',-apple-system,'Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
   --f-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#10151B; --surface:#19212A; --sunk:#222B36; --ink:#E6ECF2; --muted:#98A4B1; --line:#2E3946;
-    --accent:#8099FF; --accent-ink:#0C1222; --accent-soft:#25305A;
-    --mark:#6A5714; --rule:#28354B; --margin:#8C3F3F;
-    --good:#55C894; --good-soft:#173528; --bad:#F2836F; --bad-soft:#3D1F1B;
+    --bg:#151614; --surface:#1E201D; --sunk:#272925; --ink:#ECEBE6; --muted:#A3A199; --line:#30322D;
+    --accent:#ECEBE6; --accent-ink:#151614; --accent-soft:#2C2E2A;
+  --pop:#ECEBE6; --pop-ink:#151614; --pop-soft:#2C2E2A; --pop-text:#ECEBE6;
+  --heat1:#3A3C37; --heat2:#8C8A82; --heat3:#ECEBE6; --heat-ink:#151614;
+  --t1:#43281E; --t1i:#F4A283; --t2:#1E2F4A; --t2i:#8DB6F5; --t3:#1B3628; --t3i:#71CF9E; --t4:#2E2648; --t4i:#B5A0F0;
+    --mark:#5E4E17; --rule:#2E302B; --margin:#7A3D33;
+    --good:#62C590; --good-soft:#1B3326; --bad:#EE8A73; --bad-soft:#3B211C;
     --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 22px rgba(0,0,0,.28);
     color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
-  --bg:#10151B; --surface:#19212A; --sunk:#222B36; --ink:#E6ECF2; --muted:#98A4B1; --line:#2E3946;
-  --accent:#8099FF; --accent-ink:#0C1222; --accent-soft:#25305A;
-  --mark:#6A5714; --rule:#28354B; --margin:#8C3F3F;
-  --good:#55C894; --good-soft:#173528; --bad:#F2836F; --bad-soft:#3D1F1B;
+  --bg:#151614; --surface:#1E201D; --sunk:#272925; --ink:#ECEBE6; --muted:#A3A199; --line:#30322D;
+  --accent:#ECEBE6; --accent-ink:#151614; --accent-soft:#2C2E2A;
+  --pop:#ECEBE6; --pop-ink:#151614; --pop-soft:#2C2E2A; --pop-text:#ECEBE6;
+  --heat1:#3A3C37; --heat2:#8C8A82; --heat3:#ECEBE6; --heat-ink:#151614;
+  --t1:#43281E; --t1i:#F4A283; --t2:#1E2F4A; --t2i:#8DB6F5; --t3:#1B3628; --t3i:#71CF9E; --t4:#2E2648; --t4i:#B5A0F0;
+  --mark:#5E4E17; --rule:#2E302B; --margin:#7A3D33;
+  --good:#62C590; --good-soft:#1B3326; --bad:#EE8A73; --bad-soft:#3B211C;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 22px rgba(0,0,0,.28);
   color-scheme:dark;
 }
@@ -83,13 +92,15 @@ textarea{min-height:110px;resize:vertical;line-height:1.5}
 .row.split{justify-content:space-between}
 
 .btn{min-height:44px;padding:0 16px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
-.btn:hover{border-color:var(--muted)}
+.btn:hover{border-color:var(--accent)}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
 .btn.primary:hover{filter:brightness(1.06)}
 .btn.good{background:var(--good-soft);color:var(--good);border-color:transparent}
 .btn.bad{background:var(--bad-soft);color:var(--bad);border-color:transparent}
 .btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
 .btn.danger{color:var(--bad)}
+.btn.ghost:hover{color:var(--ink)}
+.btn.danger:hover{border-color:var(--bad)}
 .btn.wide{flex:1}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .btn svg{width:18px;height:18px}
@@ -105,8 +116,8 @@ textarea{min-height:110px;resize:vertical;line-height:1.5}
 .stat.due b{color:var(--accent)}
 .boxes{justify-self:end;display:flex;flex-direction:column;gap:4px;align-items:flex-end}
 .boxes .bars{display:flex;gap:4px;align-items:flex-end;height:34px}
-.boxes .bars i{width:12px;background:var(--accent);opacity:.35;border-radius:2px 2px 0 0;min-height:2px}
-.boxes .bars i.has{opacity:.9}
+.boxes .bars i{width:12px;background:var(--sunk);border-radius:2px 2px 0 0;min-height:2px}
+.boxes .bars i.has{background:var(--pop)}
 .boxes .lbl{font-size:11px;color:var(--muted);letter-spacing:.04em}
 @media (max-width:380px){.summary{grid-template-columns:1fr 1fr}.boxes{grid-column:1/-1;justify-self:start;align-items:flex-start}}
 
@@ -130,14 +141,14 @@ details.panel:not([open]){gap:0}
 .chip.due{background:var(--accent-soft);color:var(--accent);font-weight:600}
 .minibtns{display:flex;gap:4px}
 .minibtns button{width:34px;height:34px;border:0;background:transparent;border-radius:7px;color:var(--muted);display:grid;place-items:center;cursor:pointer}
-.minibtns button:hover{background:var(--sunk);color:var(--ink)}
+.minibtns button:hover{color:var(--accent)}
 .minibtns svg{width:17px;height:17px}
 .empty{padding:28px 16px;text-align:center;color:var(--muted)}
 
 /* 인덱스 카드 */
 .progress{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--muted)}
 .bar{flex:1;height:6px;border-radius:99px;background:var(--sunk);overflow:hidden}
-.bar i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .3s}
+.bar i{display:block;height:100%;background:var(--pop);border-radius:99px;transition:width .3s}
 .cardwrap{perspective:1400px;touch-action:pan-y;cursor:grab;transition:transform .25s ease;user-select:none;-webkit-user-select:none}
 .cardwrap.dragging{transition:none;cursor:grabbing}
 .card{position:relative;height:clamp(250px,46vh,340px);transform-style:preserve-3d;transition:transform .5s cubic-bezier(.3,.7,.2,1)}
@@ -223,7 +234,7 @@ details.panel:not([open]){gap:0}
 .pickchip{font-size:13px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px 6px 3px 10px;display:inline-flex;align-items:center}
 .pickchip .langtag{margin-left:6px}
 .backbar{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:-6px}
-.addbtn{flex:none;width:44px;height:44px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;cursor:pointer;box-shadow:var(--shadow);transition:transform .15s}
+.addbtn{flex:none;width:44px;height:44px;border-radius:50%;border:0;background:var(--pop);color:var(--pop-ink);display:grid;place-items:center;cursor:pointer;box-shadow:var(--shadow);transition:transform .15s}
 .addbtn:active{transform:scale(.94)}
 .addbtn svg{width:22px;height:22px}
 .addpane{display:flex;flex-direction:column;gap:12px}
@@ -303,7 +314,9 @@ button.pickchip{cursor:pointer;font:inherit;font-size:13px;color:var(--ink)}
 .rows{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .rows li + li{border-top:1px solid var(--line)}
 .rowbtn{width:100%;display:flex;align-items:center;gap:12px;padding:12px 14px;background:none;border:0;text-align:left;cursor:pointer;color:var(--ink);font:inherit}
-.rowbtn:hover{background:var(--bg)}
+.rowbtn .chev{transition:transform .2s ease,color .2s ease}
+.rowbtn:hover .chev{transform:translateX(3px);color:var(--accent)}
+.rowbtn:hover .rowname{color:var(--accent)}
 .rowbtn[aria-pressed="true"]{background:var(--accent-soft)}
 .rowbtn.past{opacity:.6}
 .rowbtn .chev{flex:none;width:18px;height:18px;color:var(--muted)}
@@ -312,7 +325,11 @@ button.pickchip{cursor:pointer;font:inherit;font-size:13px;color:var(--ink)}
 .rowbtn[aria-pressed="true"] .tick{background:var(--accent);border-color:var(--accent)}
 .rowicon{flex:none;width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-family:var(--f-mono);font-size:12px;font-weight:500}
 .rowicon.deck{background:var(--sunk);color:var(--muted)}
-.rowicon.grp{background:var(--accent-soft);color:var(--accent)}
+.rowicon.grp{background:var(--sunk);color:var(--ink)}
+.rowicon.deck.l-en{background:var(--t2);color:var(--t2i)}
+.rowicon.deck.l-hr{background:var(--t1);color:var(--t1i)}
+.rowicon.deck.l-sr{background:var(--t4);color:var(--t4i)}
+.rowicon.deck.l-x{background:var(--t3);color:var(--t3i)}
 .rowicon.grp svg{width:20px;height:20px}
 .rowicon.unkic{background:var(--bad-soft);color:var(--bad);font-family:var(--f-display);font-size:17px;font-weight:700}
 .rowmain{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
@@ -377,11 +394,64 @@ button.stat{background:none;border:0;padding:0;text-align:left;cursor:pointer;co
 
 /* 아래 탭 */
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
-.tabs .in{max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
+.tabs .in{max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
+.scopetag{font-size:13px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:4px}
+.scopebar{width:100%;display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;text-align:left;cursor:pointer;color:var(--ink);font:inherit}
+.scopebar:hover{border-color:var(--accent)}
+.scopebar .lbl{font-size:12px;color:var(--muted)}
+.scopebar .chg{flex:none;font-size:13px;color:var(--accent);font-weight:600}
+.scopebar .chev{flex:none;width:18px;height:18px;color:var(--muted);margin-left:-6px}
+.listtools{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:-6px}
+.listtools .seg button{padding:6px 12px;font-size:13px}
+.sortpick{height:34px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:0 8px;font-size:13px;color:var(--ink);max-width:100%}
+.toast{width:max-content}
+.toast.act{pointer-events:auto;display:flex;align-items:center;gap:14px;padding-right:8px}
+.toast button{flex:none;border:0;background:transparent;color:inherit;font:inherit;font-weight:700;text-decoration:underline;text-underline-offset:3px;padding:6px 8px;cursor:pointer;border-radius:6px}
+button,.btn,.choice,.rowname,.term,select,.input{transition:color .2s ease,border-color .2s ease,background-color .2s ease,filter .2s ease}
+.pct{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:4px;width:44px}
+.pct b{font-size:14px;font-weight:600;color:var(--good)}
+.pct i{display:block;width:100%;height:3px;border-radius:99px;background:var(--sunk);overflow:hidden}
+.pct u{display:block;height:100%;background:var(--good);border-radius:99px}
+.cal{gap:12px}
+.calstats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.calstats .stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.calhead{display:flex;align-items:center;justify-content:space-between}
+.calhead h2{font-size:17px}
+.calhead .btn{min-height:34px;padding:0 8px}
+.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px 4px;justify-items:center}
+.calgrid.wk span{font-size:12px;color:var(--muted)}
+.calgrid button{width:40px;height:40px;border-radius:10px;border:1px solid transparent;background:transparent;color:var(--muted);font-family:var(--f-mono);font-size:13px;cursor:pointer;padding:0}
+.calgrid button.h1{background:var(--heat1);color:var(--ink)}
+.calgrid button.h2{background:var(--heat2);color:var(--heat-ink)}
+.calgrid button.h3{background:var(--heat3);color:var(--heat-ink)}
+.calgrid button.on{font-weight:600}
+.calgrid button.today{border-color:var(--ink);color:var(--ink)}
+.calgrid button.on.today{box-shadow:inset 0 0 0 2px var(--surface)}
+.calgrid button.h2.today,.calgrid button.h3.today{color:var(--heat-ink)}
+.calgrid button[aria-pressed="true"]{outline:2px solid var(--ink);outline-offset:2px}
+.calfoot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.legend{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}
+.legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+.legend i.h1{background:var(--heat1)}.legend i.h2{background:var(--heat2)}.legend i.h3{background:var(--heat3)}
+.keyhint{display:none}
+kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;background:var(--surface);color:var(--ink)}
+@media (hover:hover) and (pointer:fine){.keyhint{display:block}.touchhint{display:none}}
+.tabic{position:relative;display:grid}
+.tabic .syncdot{top:-2px;right:-5px}
+.rowicon.mode{background:var(--t1);color:var(--t1i)}
+.rowicon.mode.m-dict{background:var(--t2);color:var(--t2i)}
+.rowicon.mode.m-mean{background:var(--t3);color:var(--t3i)}
+.rowicon.mode.m-quiz{background:var(--t4);color:var(--t4i)}
+.rowicon.mode svg{width:20px;height:20px}
+.rowname .live{font-size:12px;font-weight:600;color:var(--pop-text);background:var(--pop-soft);border-radius:999px;padding:1px 8px}
+.studyscope{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.studyscope b{font-size:17px;color:var(--ink);font-family:var(--f-display)}
+.studyscope .due{color:var(--accent);font-weight:600}
+.studyscope .unk{color:var(--bad);font-weight:600}
 .tabs button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 4px 10px;font-size:12px;color:var(--muted);cursor:pointer;position:relative}
 .tabs button svg{width:22px;height:22px}
 .tabs button[aria-current="page"]{color:var(--accent);font-weight:600}
-.tabs button[aria-current="page"]::before{content:'';position:absolute;top:0;left:30%;right:30%;height:2px;background:var(--accent);border-radius:0 0 2px 2px}
+.tabs button[aria-current="page"]::before{content:'';position:absolute;top:0;left:36%;right:36%;height:3px;background:var(--pop);border-radius:0 0 3px 3px}
 
 /* 시트, 토스트, 배너 */
 .sheet{position:fixed;inset:0;z-index:20;background:rgba(10,14,20,.45);display:flex;align-items:flex-end;justify-content:center}
@@ -394,7 +464,7 @@ button.stat{background:none;border:0;padding:0;text-align:left;cursor:pointer;co
 .banner{background:var(--accent-soft);color:var(--ink);border-radius:10px;padding:10px 14px;font-size:13px}
 
 @media (prefers-reduced-motion: reduce){
-  .card,.cardwrap,.bar i,.playbtn{transition:none!important}
+  .card,.cardwrap,.bar i,.playbtn,button,.btn,.choice,.rowname,.term,.rowbtn .chev{transition:none!important}
   .toast,.toast.show{transform:translate(-50%,0)}
 }
 </style>
@@ -406,35 +476,27 @@ button.stat{background:none;border:0;padding:0;text-align:left;cursor:pointer;co
 <div id="app">
   <header class="top">
     <div class="brand">단어장</div>
-    <select id="deckSelect" class="deckpick" aria-label="단어장 선택"></select>
-    <button class="iconbtn" data-action="tab" data-view="settings" id="gearBtn" aria-label="설정"><span class="syncdot" data-sync-dot data-state="none"></span>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
-    </button>
   </header>
   <main id="view"></main>
 </div>
 
-<nav class="tabs" aria-label="학습 모드">
+<nav class="tabs" aria-label="메뉴">
   <div class="in">
     <button data-action="tab" data-view="words">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/><path d="M9 8h7M9 11.5h5"/></svg>
       단어장
     </button>
-    <button data-action="tab" data-view="cards">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="14" height="14" rx="2"/><path d="M7 3h12a2 2 0 0 1 2 2v12"/></svg>
-      플래시카드
+    <button data-action="tab" data-view="study">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+      학습
     </button>
-    <button data-action="tab" data-view="dict">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
-      받아쓰기
+    <button data-action="tab" data-view="cal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M8 14.5h.01M12 14.5h.01M16 14.5h.01M8 17.5h.01M12 17.5h.01"/></svg>
+      달력
     </button>
-    <button data-action="tab" data-view="mean">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="M13.5 6.5l4 4"/><path d="M14 20h6"/></svg>
-      뜻쓰기
-    </button>
-    <button data-action="tab" data-view="quiz">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="m8 12 3 3 5-6"/></svg>
-      퀴즈
+    <button data-action="tab" data-view="settings">
+      <span class="tabic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span class="syncdot" data-sync-dot data-state="none"></span></span>
+      설정
     </button>
   </div>
 </nav>
@@ -558,6 +620,7 @@ function validData(d){ return d && Array.isArray(d.decks) && Array.isArray(d.wor
 function fillDefaults(d){
   d.settings = Object.assign({ lang: 'en-US', rate: 0.9, currentDeck: 'all' }, d.settings || {});
   if (!Array.isArray(d.groups)) d.groups = [];
+  if (!Array.isArray(d.days)) d.days = [];
   d.groups.forEach(g => {
     // 지워진 단어장은 그룹에서도 뺌 (실제로 바뀔 때만 고쳐서 불필요한 동기화를 막음)
     const ids = (g.deckIds || []).filter(id => d.decks.some(x => x.id === id));
@@ -612,11 +675,13 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) flush
    여기서는 어댑터가 넘겨주는 함수만 씁니다.
    ============================================================ */
 const LINK_KEY = 'vocab-sync-uid';
-const KINDS = ['decks', 'words', 'groups'];
+const KINDS = ['decks', 'words', 'groups', 'days'];
+// days: 날짜별 학습 기록. 문서 id가 날짜(2026-11-15), 모드별 푼 문제 수를 담음
+const DAY_KEYS = ['cards', 'dict', 'mean', 'quiz', 'updatedAt'];
 const DECK_KEYS = ['name', 'lang', 'createdAt', 'updatedAt'];
 const GROUP_KEYS = ['name', 'examDate', 'deckIds', 'createdAt', 'updatedAt'];
 const WORD_KEYS = ['deckId', 'term', 'meaning', 'example', 'box', 'nextReview', 'correct', 'wrong', 'unknown', 'createdAt', 'updatedAt'];
-const pickDoc = (kind, o) => { const keys = kind === 'decks' ? DECK_KEYS : kind === 'groups' ? GROUP_KEYS : WORD_KEYS; const r = {}; keys.forEach(k => { if (o[k] !== undefined) r[k] = o[k]; }); return r; };
+const pickDoc = (kind, o) => { const keys = kind === 'decks' ? DECK_KEYS : kind === 'groups' ? GROUP_KEYS : kind === 'days' ? DAY_KEYS : WORD_KEYS; const r = {}; keys.forEach(k => { if (o[k] !== undefined) r[k] = o[k]; }); return r; };
 const docKey = (kind, id) => kind + '/' + id;
 function lsGet(k){ try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v){ try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
@@ -629,8 +694,9 @@ const Sync = {
   phase: 'off',             // off | waiting(서버 첫 응답 기다림) | choose(합치기 질문 중) | live
   mode: null,               // 'first'(이 기기 첫 연결) | 'resume'(이미 연결된 기기)
   synced: new Map(),        // 서버와 맞춘 상태: 'words/id' → JSON
-  remote: { decks: new Map(), words: new Map(), groups: new Map() },   // 서버(와 Firestore 캐시)가 보는 상태
-  seen: { decks: null, words: null, groups: null }, // 받은 스냅샷: null | 'cache' | 'server'
+  remote: { decks: new Map(), words: new Map(), groups: new Map(), days: new Map() },   // 서버(와 Firestore 캐시)가 보는 상태
+  daysOff: false,           // 서버가 학습 기록 저장을 거부하면 기록만 이 기기에 두고 나머지 동기화는 계속
+  seen: { decks: null, words: null, groups: null, days: null }, // 받은 스냅샷: null | 'cache' | 'server'
   cacheUsable: null,        // resume: 기기 저장소만으로 시작해도 되는지
   baseline: null,           // resume: 시작 때 localStorage에 있던 상태 (그사이 바뀐 것을 찾기 위함)
   unsub: [],
@@ -662,16 +728,24 @@ const Sync = {
     this.unsub.forEach(f => { try { f(); } catch (e) {} });
     this.unsub = []; this.stamp++;
     this.phase = 'off'; this.synced = new Map(); this.baseline = null;
-    this.remote = { decks: new Map(), words: new Map(), groups: new Map() };
-    this.seen = { decks: null, words: null, groups: null };
+    this.remote = { decks: new Map(), words: new Map(), groups: new Map(), days: new Map() };
+    this.seen = { decks: null, words: null, groups: null, days: null };
+    this.daysOff = false;
     this.cacheUsable = null;
   },
   start(){
     const stamp = this.stamp, uid = this.user.uid;
     KINDS.forEach(kind => {
-      this.unsub.push(this.adapter.listen(uid, kind,
+      const offDays = err => { this.daysOff = true; console.warn('study log sync off', err); this.onSnap('days', { fromCache: false, changes: [] }); };
+      try { this.unsub.push(this.adapter.listen(uid, kind,
         snap => { if (stamp === this.stamp) this.onSnap(kind, snap); },
-        err => { if (stamp === this.stamp) this.fail(err); }));
+        err => {
+          if (stamp !== this.stamp) return;
+          // 학습 기록은 없어도 되는 정보: 이 목록만 막혀 있으면 빈 것으로 치고 단어 동기화는 그대로 진행
+          if (kind === 'days') { offDays(err); return; }
+          this.fail(err);
+        })); }
+      catch (err) { if (kind === 'days') setTimeout(() => { if (stamp === this.stamp) offDays(err); }, 0); else throw err; }
     });
   },
 
@@ -800,11 +874,13 @@ const Sync = {
     now.forEach((json, key) => {
       if (this.synced.get(key) === json) return;
       const [kind, id] = key.split('/');
+      if (kind === 'days' && this.daysOff) return;
       ops.push({ kind, id, data: JSON.parse(json) });
     });
     this.synced.forEach((json, key) => {
       if (now.has(key)) return;
       const [kind, id] = key.split('/');
+      if (kind === 'days' && this.daysOff) return;
       ops.push({ kind, id, data: null });
     });
     if (!ops.length) return;
@@ -953,8 +1029,26 @@ function nextLabel(w){
   const days = Math.round((w.nextReview - startOfToday()) / DAY);
   return days <= 1 ? '내일' : days + '일 후';
 }
-function grade(id, ok){
+// 날짜 키: 이 기기 시간 기준 2026-11-15
+function dayKey(d = new Date()){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+const dayById = id => (db.days || []).find(x => x.id === id);
+const dayTotal = d => d ? (d.cards || 0) + (d.dict || 0) + (d.mean || 0) + (d.quiz || 0) : 0;
+function logStudy(mode){
+  const id = dayKey(); let d = dayById(id);
+  if (!d) { d = { id }; db.days.push(d); }
+  d[mode] = (d[mode] || 0) + 1; d.updatedAt = Date.now();
+}
+function streak(){
+  let n = 0; const d = new Date();
+  if (!dayTotal(dayById(dayKey(d)))) d.setDate(d.getDate() - 1);   // 오늘 아직 안 했으면 어제까지의 연속
+  while (dayTotal(dayById(dayKey(d)))) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
+// 틀리면 모르는 단어에 넣고, 맞히면 뺌. 퀴즈는 찍어서 맞힐 수 있으니 맞혀도 빼지 않음(keepUnknown)
+function grade(id, ok, keepUnknown, noLog){
   const w = wordById(id); if (!w) return;
+  if (!noLog) logStudy(MODES[view] ? view : 'cards');
+  if (!ok) setUnknown(w, true); else if (!keepUnknown) setUnknown(w, false);
   if (ok) {
     w.box = Math.min(w.box + 1, INTERVALS.length - 1);
     w.correct++;
@@ -1147,10 +1241,20 @@ const ICON = {
 
 /* ---------- 상태 ---------- */
 let view = 'words';
+let calMonth = null, calPick = null;   // 달력: 보고 있는 달(그 달 1일), 고른 날짜
+let lastMode = null;   // 마지막으로 연 학습 모드
 let deckOpen = false;   // 단어장 탭: false면 단어장 목록, true면 고른 단어장의 단어 화면
 let searchText = '';
+let wordFilter = 'all';   // all | due | unk
+const SORTS = { recent: '최근 추가순', term: '단어순', meaning: '뜻순', wrong: '많이 틀린 순' };
+const sorters = {
+  recent: (a, b) => b.createdAt - a.createdAt,
+  term: (a, b) => a.term.localeCompare(b.term, undefined, { sensitivity: 'base' }),
+  meaning: (a, b) => a.meaning.localeCompare(b.meaning, 'ko'),
+  wrong: (a, b) => (b.wrong || 0) - (a.wrong || 0) || b.createdAt - a.createdAt,
+};
 const sessions = { cards: null, dict: null, mean: null, quiz: null };
-const opts = { fcSource: 'due', fcFront: 'term', qzDir: 't2m' };
+const opts = { fcSource: 'all', fcFront: 'term', qzDir: 't2m' };
 // 모드별 문제 수: 숫자 또는 'all'(전체). 기기마다 기억함
 const COUNT_DEFAULT = { cards: 30, dict: 10, mean: 10, quiz: 10 };
 function getCount(mode){ const c = (db.settings.counts || {})[mode]; return c === 'all' || (Number.isInteger(c) && c > 0) ? c : COUNT_DEFAULT[mode]; }
@@ -1185,24 +1289,12 @@ function pickFor(mode, words, onlyDue){
 function resetSessions(){ sessions.cards = sessions.dict = sessions.mean = sessions.quiz = null; }
 
 /* ---------- 공통 렌더 ---------- */
-function renderDeckSelect(){
-  const sel = $('deckSelect');
-  const c = db.settings.currentDeck;
-  const multi = c === 'multi' ? db.settings.selectedDecks : null;
-  sel.innerHTML = `<option value="all">모든 단어장 (${db.words.length})</option>` +
-    (multi ? `<option value="multi">선택한 단어장 ${multi.length}개 (${currentWords().length})</option>` : '') +
-    (unknownCount() || c === 'unk:all' ? `<option value="unk:all">모르는 단어 (${unknownCount()})</option>` : '') +
-    (isUnkScope(c) && c !== 'unk:all' ? `<option value="${esc(c)}">${esc(scopeName(c))} (${currentWords().length})</option>` : '') +
-    sortedGroups().map(g => `<option value="group:${g.id}">그룹 · ${esc(g.name)} (${groupWords(g).length})</option>`).join('') +
-    db.decks.map(d => `<option value="${d.id}">${esc(d.name)} (${db.words.filter(w => w.deckId === d.id).length})</option>`).join('');
-  sel.value = c;
-}
 function render(){
-  renderDeckSelect();
-  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.view === view ? 'page' : 'false'));
-  $('gearBtn').setAttribute('aria-current', view === 'settings' ? 'page' : 'false');
+  const tabOf = MODES[view] ? 'study' : view;
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.view === tabOf ? 'page' : 'false'));
   const v = $('view');
-  v.innerHTML = ({ words: () => deckOpen ? viewWords() : viewDeckList(), cards: viewCards, dict: viewDict, mean: viewMean, quiz: viewQuiz, settings: viewSettings })[view]();
+  v.innerHTML = (MODES[view] ? `<div class="backbar"><button class="btn ghost" data-action="tab" data-view="study">${CHEV.replace('class="chev"', 'style="width:18px;height:18px;transform:scaleX(-1)"')}학습</button><span class="scopetag">${esc(scopeName(db.settings.currentDeck))}</span></div>` : '')
+    + ({ words: () => deckOpen ? viewWords() : viewDeckList(), study: viewStudy, cal: viewCal, cards: viewCards, dict: viewDict, mean: viewMean, quiz: viewQuiz, settings: viewSettings })[view]();
   if (view === 'cards') bindCard();
   if (view === 'dict') { const inp = $('dictInput'); if (inp && !sessions.dict?.answered) inp.focus({ preventScroll: true }); }
   if (view === 'mean') { const inp = $('meanInput'); if (inp && !sessions.mean?.answered) inp.focus({ preventScroll: true }); }
@@ -1210,8 +1302,16 @@ function render(){
     const s = $('search'); if (s) s.value = searchText;
   }
 }
-function toast(msg, ms = 2200){
+// undo를 넘기면 알림에 '되돌리기' 버튼이 붙고 조금 더 오래 떠 있음
+function toast(msg, ms = 2200, undo){
   const t = $('toast'); t.textContent = msg;
+  t.classList.toggle('act', !!undo);
+  if (undo) {
+    ms = Math.max(ms, 6000);
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = '되돌리기';
+    b.onclick = () => { t.classList.remove('show'); undo(); };
+    t.appendChild(b);
+  }
   t.classList.add('show');
   clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms);
 }
@@ -1226,7 +1326,7 @@ function resultBlock({ title, score, total, missed, retryAction, newAction, miss
   return `<div class="panel result">
     <span class="eyebrow">${title}</span>
     <div class="score num">${score}<small> / ${total}</small></div>
-    <p class="muted">${score === total ? '전부 맞혔어요.' : `${missLabel} ${list.length}개는 오늘 다시 복습 목록에 들어가요.`}</p>
+    <p class="muted">${score === total ? '전부 맞혔어요.' : `${missLabel} ${list.length}개는 모르는 단어에 모아 뒀어요.`}</p>
     ${note ? `<p class="banner" style="width:100%">${note}</p>` : ''}
     ${list.length ? `<ul class="misslist">${list.map(w => `<li><b>${esc(w.term)}</b><span>${esc(w.meaning)}</span></li>`).join('')}</ul>` : ''}
     <div class="row" style="justify-content:center">
@@ -1246,21 +1346,29 @@ function unkByDeck(){
   const rows = db.decks.map(d => [d, db.words.filter(w => w.deckId === d.id && w.unknown).length]).filter(([, n]) => n);
   if (!rows.length) return '';
   return `<div class="rowlabel">단어장별</div><ul class="rows">${rows.map(([d, n]) => `<li><button class="rowbtn" data-action="open-deck" data-id="unk:${d.id}">
-    <span class="rowicon deck" aria-hidden="true">${esc(String(d.lang || 'en').slice(0, 2).toUpperCase())}</span>
+    <span class="rowicon deck l-${['en', 'hr', 'sr'].includes(String(d.lang || 'en').slice(0, 2)) ? String(d.lang || 'en').slice(0, 2) : 'x'}" aria-hidden="true">${esc(String(d.lang || 'en').slice(0, 2).toUpperCase())}</span>
     <span class="rowmain"><span class="rowname">${esc(d.name)}</span><span class="rowmeta"><span class="unk num">모름 ${n}</span></span></span>${CHEV}</button></li>`).join('')}</ul>
     <div class="rowlabel">모든 모르는 단어</div>`;
+}
+// 아는 단어: 마지막으로 맞혀서 상자 1 이상에 있고, 모르는 단어 표시가 없는 단어
+const isKnown = w => w.box > 0 && !w.unknown;
+function knownPct(ws){ return ws.length ? Math.round(ws.filter(isKnown).length / ws.length * 100) : 0; }
+function pctTag(ws){
+  if (!ws.length) return '';
+  const p = knownPct(ws);
+  return `<span class="pct" aria-label="아는 단어 ${p}%"><b class="num">${p}%</b><i><u style="width:${p}%"></u></i></span>`;
 }
 function deckRow(d){
   const ws = db.words.filter(w => w.deckId === d.id);
   const due = ws.filter(isDue).length, unk = ws.filter(w => w.unknown).length;
   const on = picking && picked.has(d.id);
   const meta = ws.length
-    ? `<span class="num">단어 ${ws.length}</span>${due ? `<span class="due num">복습 ${due}</span>` : ''}${unk ? `<span class="unk num">모름 ${unk}</span>` : ''}`
+    ? `<span class="num">단어 ${ws.length}</span>`
     : '<span>비어 있음</span>';
   return `<li><button class="rowbtn" data-action="${picking ? 'pick-toggle' : 'open-deck'}" data-id="${d.id}" ${picking ? `aria-pressed="${on}"` : ''}>
-    <span class="rowicon deck" aria-hidden="true">${esc(String(d.lang || 'en').slice(0, 2).toUpperCase())}</span>
+    <span class="rowicon deck l-${['en', 'hr', 'sr'].includes(String(d.lang || 'en').slice(0, 2)) ? String(d.lang || 'en').slice(0, 2) : 'x'}" aria-hidden="true">${esc(String(d.lang || 'en').slice(0, 2).toUpperCase())}</span>
     <span class="rowmain"><span class="rowname">${esc(d.name)}</span><span class="rowmeta">${meta}</span></span>
-    ${picking ? `<span class="tick" aria-hidden="true">${on ? ICON.check : ''}</span>` : CHEV}
+    ${picking ? `<span class="tick" aria-hidden="true">${on ? ICON.check : ''}</span>` : pctTag(ws) + CHEV}
   </button></li>`;
 }
 function groupRow(g){
@@ -1268,8 +1376,8 @@ function groupRow(g){
   return `<li><button class="rowbtn ${dd && dd.past ? 'past' : ''}" data-action="open-deck" data-id="group:${g.id}">
     <span class="rowicon grp" aria-hidden="true">${ICON.folder}</span>
     <span class="rowmain"><span class="rowname">${esc(g.name)}${dd ? `<span class="dday ${dd.soon ? 'soon' : ''}">${dd.text}</span>` : ''}</span>
-      <span class="rowmeta"><span class="num">단어장 ${n}</span><span class="num">단어 ${ws.length}</span>${due ? `<span class="due num">복습 ${due}</span>` : ''}</span></span>
-    ${CHEV}
+      <span class="rowmeta"><span class="num">단어장 ${n}</span><span class="num">단어 ${ws.length}</span></span></span>
+    ${pctTag(ws)}${CHEV}
   </button></li>`;
 }
 function viewDeckList(){
@@ -1277,19 +1385,13 @@ function viewDeckList(){
   const groups = sortedGroups();
   const inGroup = new Set(groups.flatMap(g => g.deckIds));
   const loose = picking ? db.decks : db.decks.filter(d => !inGroup.has(d.id));
-  const unk = unknownCount();
-  const top = [];
-  if (!picking && unk) top.push(`<li><button class="rowbtn" data-action="open-deck" data-id="unk:all">
-      <span class="rowicon unkic" aria-hidden="true">?</span>
-      <span class="rowmain"><span class="rowname">모르는 단어</span><span class="rowmeta"><span class="unk num">${unk}개</span><span>플래시카드에서 '몰라요'를 누른 단어</span></span></span>${CHEV}</button></li>`);
   return `
   <section class="homehead">
     <div><h2>${picking ? '단어장 고르기' : '내 단어장'}</h2>
-      <p class="muted num">${picking ? '함께 볼 단어장을 눌러 주세요' : `단어 ${db.words.length}개 · 오늘 복습 ${allDue}개`}</p></div>
+      <p class="muted num">${picking ? '함께 볼 단어장을 눌러 주세요' : `단어 ${db.words.length}개`}</p></div>
     ${picking ? '' : `<button class="addbtn" data-action="home-add" aria-label="단어장, 그룹 만들기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>`}
   </section>
   ${Sync.configured && Sync.adapter && !Sync.user && !picking ? `<div class="banner loginbanner"><span>로그인하면 모든 기기에서 같은 단어장을 써요</span><button class="linkbtn" data-action="tab" data-view="settings">로그인</button></div>` : ''}
-  ${top.length ? `<ul class="rows">${top.join('')}</ul>` : ''}
   ${!picking && groups.length ? `<div class="rowlabel">그룹</div><ul class="rows">${groups.map(groupRow).join('')}</ul>` : ''}
   ${loose.length ? `${!picking && groups.length ? '<div class="rowlabel">단어장</div>' : ''}<ul class="rows">${loose.map(deckRow).join('')}</ul>` : ''}
   ${!db.decks.length ? `<p class="muted">단어장이 없어요. + 버튼으로 만들어 주세요.</p>` : ''}
@@ -1304,6 +1406,7 @@ function viewDeckList(){
 }
 function viewWords(){
   const words = currentWords();
+  if (wordFilter !== 'unk' || isUnkScope(db.settings.currentDeck)) wordFilter = 'all';
   const due = words.filter(isDue).length;
   const counts = INTERVALS.map((_, i) => words.filter(w => w.box === i).length);
   const max = Math.max(1, ...counts);
@@ -1322,7 +1425,7 @@ function viewWords(){
       <button class="btn" data-action="tab" data-view="cards">플래시카드</button><button class="btn" data-action="tab" data-view="dict">받아쓰기</button>
       <button class="btn" data-action="tab" data-view="mean">뜻쓰기</button><button class="btn" data-action="tab" data-view="quiz">퀴즈</button>
     </div>` : ''}
-  ${unkHere ? `<p class="muted" style="font-size:13px;margin-top:-8px">플래시카드에서 '알아요'를 누르거나 ✓를 누르면 빠져요.</p>` : ''}
+  ${unkHere ? `<p class="muted" style="font-size:13px;margin-top:-8px">학습에서 맞히거나 ✓를 누르면 빠져요. (퀴즈는 맞혀도 남아요)</p>` : ''}
   ${unkHere && words.length ? `<div class="focusrow" role="group" aria-label="모르는 단어로 학습">
       <span class="muted">이 단어들로</span>
       <button class="btn" data-action="study-unk" data-view="cards">플래시카드</button><button class="btn" data-action="tab" data-view="dict">받아쓰기</button>
@@ -1332,38 +1435,43 @@ function viewWords(){
   ${multi ? `<div class="pickchips">${multi.map(d => `<span class="pickchip">${esc(d.name)}${langTag(d.lang)}</span>`).join('')}</div>` : ''}
   <section class="summary">
     <div class="stat"><b class="num">${words.length}</b><span>단어</span></div>
-    <div class="stat due"><b class="num">${due}</b><span>오늘 복습</span></div>
+    ${!unkHere && words.length ? `<div class="stat known"><b class="num">${knownPct(words)}%</b><span>아는 단어</span></div>` : ''}
     ${!unkHere && unkInScope ? `<button class="stat unk" data-action="open-deck" data-id="unk:${esc(db.settings.currentDeck)}" aria-label="모르는 단어 ${unkInScope}개 보기"><b class="num">${unkInScope}</b><span>모름 ›</span></button>` : ''}
-    <div class="boxes" title="레이트너 상자: 맞힐수록 오른쪽 상자로 옮겨가고 복습 간격이 길어져요">
+    <div class="boxes" title="맞힐수록 오른쪽 상자로 옮겨가요">
       <div class="bars">${counts.map((c, i) => `<i class="${c ? 'has' : ''}" style="height:${Math.max(6, c / max * 100)}%" title="${i}번 상자 ${c}개"></i>`).join('')}</div>
       <span class="lbl">상자 0 → 6</span>
     </div>
   </section>
 
   <input class="input" id="search" type="search" placeholder="단어나 뜻으로 검색" aria-label="검색">
+  ${words.length ? `<div class="listtools">
+    <div class="seg" role="group" aria-label="보기" ${unkHere ? 'hidden' : ''}>${[['all', '전체'], ...(unkHere ? [] : [['unk', '모름']])].map(([k, t]) => `<button data-action="word-filter" data-f="${k}" aria-pressed="${wordFilter === k}">${t}</button>`).join('')}</div>
+    <select id="wordSort" class="sortpick" aria-label="정렬">${Object.entries(SORTS).map(([k, t]) => `<option value="${k}" ${(db.settings.wordSort || 'recent') === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
+  </div>` : ''}
   <ul class="wordlist" id="wordList">${wordItems(words)}</ul>`;
 }
 function wordItems(words){
   const q = norm(searchText);
   const list = words
     .filter(w => !q || norm(w.term).includes(q) || norm(w.meaning).includes(q))
-    .sort((a, b) => b.createdAt - a.createdAt);
-  if (!words.length && isUnkScope(db.settings.currentDeck)) return `<li class="empty">모르는 단어가 없어요. 플래시카드에서 '몰라요'를 누르면 여기에 모여요.</li>`;
+    .filter(w => wordFilter === 'unk' ? w.unknown : true)
+    .sort(sorters[db.settings.wordSort] || sorters.recent);
+  if (!words.length && isUnkScope(db.settings.currentDeck)) return `<li class="empty">모르는 단어가 없어요. 학습에서 틀린 단어가 여기에 모여요.</li>`;
   if (!words.length) return `<li class="empty"><p>아직 단어가 없어요.</p><p style="margin-top:12px"><button class="btn primary" data-action="add-open">첫 단어 추가</button></p></li>`;
-  if (!list.length) return `<li class="empty">'${esc(searchText)}'에 맞는 단어가 없어요.</li>`;
+  if (!list.length) return `<li class="empty">${q ? `'${esc(searchText)}'에 맞는 단어가 없어요.` : '모르는 단어가 없어요.'}</li>`;
   const sc = db.settings.currentDeck, base = isUnkScope(sc) ? unkBase(sc) : sc;
   const showDeck = (base === 'all' && db.decks.length > 1) || base === 'multi' || !!groupOf(base);
   const unkScope = isUnkScope(sc);
   return list.map(w => `
     <li>
       <button class="wmain" data-action="edit-word" data-id="${w.id}" aria-label="${esc(w.term)} 수정">
-        <span class="term ${isDue(w) ? 'due' : ''}">${esc(w.term)}</span>
+        <span class="term">${esc(w.term)}</span>
         <span class="meaning">${esc(w.meaning)}</span>
         ${w.example ? `<span class="example">${esc(w.example)}</span>` : ''}
         ${showDeck ? `<span class="wdeck">${esc(deckById(w.deckId)?.name || '')}</span>` : ''}
       </button>
       <div class="wside">
-        <span class="wstate">${w.unknown ? '<span class="unk">모름</span>' : ''}<span class="${isDue(w) ? 'due' : ''}">${nextLabel(w)}</span></span>
+        <span class="wstate">${w.unknown ? '<span class="unk">모름</span>' : ''}</span>
         <div class="minibtns">
           ${w.unknown && unkScope ? `<button data-action="unknown-clear" data-id="${w.id}" aria-label="${esc(w.term)} 모르는 단어에서 빼기" title="외웠어요">${ICON.check}</button>` : ''}
           <button data-action="speak-word" data-id="${w.id}" aria-label="${esc(w.term)} 발음 듣기">${ICON.speaker}</button>
@@ -1454,15 +1562,97 @@ function editSheet(id){
       <div class="field"><label for="eExample">예문</label><input class="input" id="eExample" value="${esc(w.example)}" autocapitalize="off"></div>
       <div class="field"><label for="eDeck">단어장</label><select class="select" id="eDeck">${db.decks.map(d => `<option value="${d.id}" ${d.id === w.deckId ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div>
       <label class="check"><input type="checkbox" id="eUnknown" ${w.unknown ? 'checked' : ''}> 모르는 단어로 표시</label>
-      <p class="muted" style="font-size:13px">맞힘 <span class="num">${w.correct}</span> · 틀림 <span class="num">${w.wrong}</span> · 상자 <span class="num">${w.box}</span> · 다음 복습 ${nextLabel(w)}</p>
+      <p class="muted" style="font-size:13px">맞힘 <span class="num">${w.correct}</span> · 틀림 <span class="num">${w.wrong}</span> · 상자 <span class="num">${w.box}</span></p>
       <div class="row split" id="editActions">
-        <button type="button" class="btn danger" data-action="delete-word-ask">삭제</button>
+        <button type="button" class="btn danger" data-action="delete-word">삭제</button>
         <div class="row"><button type="button" class="btn" data-action="reset-word">기록 초기화</button><button type="submit" class="btn primary">저장</button></div>
       </div>
     </form>`);
 }
 
 /* ============ 2. 플래시카드 ============ */
+// 학습 탭: 네 가지 모드를 고르는 화면
+const MODES = {
+  cards: { name: '플래시카드', desc: '카드를 넘기며 아는지 확인', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="14" height="14" rx="2"/><path d="M7 3h12a2 2 0 0 1 2 2v12"/></svg>' },
+  dict:  { name: '받아쓰기',   desc: '발음을 듣고 단어 쓰기',     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>' },
+  mean:  { name: '뜻쓰기',     desc: '단어를 보고 뜻 쓰기',       icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="M13.5 6.5l4 4"/><path d="M14 20h6"/></svg>' },
+  quiz:  { name: '퀴즈',       desc: '네 개 중에 고르기',         icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="m8 12 3 3 5-6"/></svg>' },
+};
+function sessionLive(m){
+  const s = sessions[m]; if (!s) return false;
+  const q = s.queue || s.qs; return !!q && s.i < q.length;
+}
+function scopeBar(words){
+  const due = words.filter(isDue).length, unk = words.filter(w => w.unknown).length;
+  return `<button class="scopebar" data-action="scope-open" aria-label="학습 범위 바꾸기">
+    <span class="rowmain"><span class="lbl">학습 범위</span><span class="rowname">${esc(scopeName(db.settings.currentDeck))}</span>
+      <span class="rowmeta"><span class="num">단어 ${words.length}</span></span></span>
+    <span class="chg">바꾸기</span>${CHEV}</button>`;
+}
+function scopeSheet(){
+  const c = db.settings.currentDeck;
+  const row = (id, name, n, sub) => `<li><button class="rowbtn" data-action="scope-pick" data-id="${esc(id)}" aria-pressed="${id === c}">
+    <span class="rowmain"><span class="rowname">${esc(name)}</span><span class="rowmeta"><span class="num">${sub || ''}단어 ${n}</span></span></span>
+    <span class="tick" aria-hidden="true">${id === c ? ICON.check : ''}</span></button></li>`;
+  const rows = [row('all', '모든 단어장', db.words.length)];
+  if (c === 'multi') rows.push(row('multi', scopeName('multi'), currentWords().length));
+  if (unknownCount()) rows.push(row('unk:all', '모르는 단어', unknownCount()));
+  if (isUnkScope(c) && c !== 'unk:all') rows.push(row(c, scopeName(c), currentWords().length));
+  sortedGroups().forEach(g => rows.push(row('group:' + g.id, g.name, groupWords(g).length, '그룹 · ')));
+  db.decks.forEach(d => rows.push(row(d.id, d.name, db.words.filter(w => w.deckId === d.id).length)));
+  openSheet(`<h2 style="font-size:20px">학습 범위</h2><ul class="rows">${rows.join('')}</ul>
+    <div class="row end"><button class="btn" data-action="sheet-close">닫기</button></div>`, true);
+}
+function calendar(){
+  const today = new Date();
+  if (!calMonth) calMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const y = calMonth.getFullYear(), m = calMonth.getMonth();
+  const first = new Date(y, m, 1).getDay(), last = new Date(y, m + 1, 0).getDate();
+  const tKey = dayKey(today), isNow = y === today.getFullYear() && m === today.getMonth();
+  let cells = '<i></i>'.repeat(first), done = 0, sum = 0;
+  for (let n = 1; n <= last; n++) {
+    const key = dayKey(new Date(y, m, n)), tot = dayTotal(dayById(key));
+    if (tot) { done++; sum += tot; }
+    cells += `<button class="${tot ? 'on h' + heat(tot) : ''} ${key === tKey ? 'today' : ''}" data-action="cal-pick" data-id="${key}" aria-pressed="${calPick === key}" aria-label="${m + 1}월 ${n}일${tot ? ', 학습 ' + tot + '문제' : ''}">${n}</button>`;
+  }
+  const pick = calPick && calPick.startsWith(dayKey(calMonth).slice(0, 7)) ? calPick : null;
+  const pd = pick && dayById(pick), st = streak();
+  const detail = pick
+    ? `<b>${Number(pick.slice(5, 7))}월 ${Number(pick.slice(8))}일</b> ` + (dayTotal(pd)
+        ? Object.keys(MODES).filter(k => pd[k]).map(k => `${MODES[k].name} <span class="num">${pd[k]}</span>`).join(' · ')
+        : '학습 기록이 없어요')
+    : '날짜를 누르면 그날 한 학습이 나와요';
+  return `<section class="calstats">
+    <div class="stat"><b class="num">${st}</b><span>연속 학습일</span></div>
+    <div class="stat"><b class="num">${done}</b><span>이 달 학습일</span></div>
+    <div class="stat"><b class="num">${sum}</b><span>이 달 푼 문제</span></div>
+  </section>
+  <section class="panel cal" aria-label="학습 달력">
+    <div class="calhead">
+      <button class="btn ghost" data-action="cal-move" data-d="-1" aria-label="이전 달">${CHEV.replace('class="chev"', 'style="width:18px;height:18px;transform:scaleX(-1)"')}</button>
+      <h2 class="num">${y}년 ${m + 1}월</h2>
+      <button class="btn ghost" data-action="cal-move" data-d="1" aria-label="다음 달" ${isNow ? 'disabled' : ''}>${CHEV.replace('class="chev"', 'style="width:18px;height:18px"')}</button>
+    </div>
+    <div class="calgrid wk" aria-hidden="true">${['일', '월', '화', '수', '목', '금', '토'].map(d => `<span>${d}</span>`).join('')}</div>
+    <div class="calgrid">${cells}</div>
+    <div class="calfoot"><p class="hintline">${detail}</p>
+      <span class="legend" aria-hidden="true">적게<i class="h1"></i><i class="h2"></i><i class="h3"></i>많이</span></div>
+  </section>`;
+}
+// 하루 푼 문제 수 → 진하기 1~3
+const heat = n => n >= 30 ? 3 : n >= 10 ? 2 : 1;
+function viewCal(){ return `<div class="deckhead"><h2>학습 달력</h2></div>` + calendar(); }
+function viewStudy(){
+  const words = currentWords();
+  if (!words.length) return scopeBar(words) + emptyState('이 범위에는 아직 단어가 없어요.');
+  const due = words.filter(isDue).length, unk = words.filter(w => w.unknown).length;
+  return `${scopeBar(words)}
+  <ul class="rows">${Object.entries(MODES).map(([k, m]) => `<li><button class="rowbtn" data-action="tab" data-view="${k}">
+    <span class="rowicon mode m-${k}" aria-hidden="true">${m.icon}</span>
+    <span class="rowmain"><span class="rowname">${m.name}${sessionLive(k) ? '<span class="live">진행 중</span>' : ''}</span><span class="rowmeta"><span>${m.desc}</span></span></span>${CHEV}
+  </button></li>`).join('')}</ul>
+`;
+}
 function viewCards(){
   const words = currentWords();
   if (!words.length) return emptyState('이 단어장에는 아직 단어가 없어요.');
@@ -1475,7 +1665,6 @@ function viewCards(){
       <h2>플래시카드</h2>
       <div class="field"><label>카드 범위</label>
         <div class="seg">
-          <button data-action="set-opt" data-key="fcSource" data-val="due" aria-pressed="${opts.fcSource === 'due'}">오늘 복습 <span class="num">${due}</span></button>
           <button data-action="set-opt" data-key="fcSource" data-val="all" aria-pressed="${opts.fcSource === 'all'}">모든 단어 <span class="num">${words.length}</span></button>
           ${unk ? `<button data-action="set-opt" data-key="fcSource" data-val="unknown" aria-pressed="${opts.fcSource === 'unknown'}">모르는 단어 <span class="num">${unk}</span></button>` : ''}
         </div>
@@ -1487,8 +1676,7 @@ function viewCards(){
           <button data-action="set-opt" data-key="fcFront" data-val="meaning" aria-pressed="${opts.fcFront === 'meaning'}">뜻</button>
         </div>
       </div>
-      ${opts.fcSource === 'due' && !due ? `<p class="banner">오늘 복습할 단어를 모두 끝냈어요. 더 하고 싶다면 '모든 단어'를 골라 주세요.</p>` : ''}
-      <p class="hintline">'몰라요'를 누른 단어는 모르는 단어에 따로 모여요.</p>
+      <p class="hintline">'몰라요'를 누른 단어는 모르는 단어에 모여요.</p>
       <div class="row end"><button class="btn primary" data-action="fc-start" ${avail ? '' : 'disabled'}>${avail ? startLabel('cards', avail, '장') : '시작'}</button></div>
     </section>`;
   }
@@ -1516,7 +1704,8 @@ function viewCards(){
     <button class="btn" data-action="fc-speak" aria-label="발음 듣기">${ICON.speaker}</button>
     <button class="btn good wide" data-action="fc-yes">알아요</button>
   </div>
-  <p class="hint">카드를 탭하면 뒤집혀요 · 오른쪽으로 밀면 알아요, 왼쪽은 몰라요</p>`;
+  <p class="hint touchhint">카드를 탭하면 뒤집혀요 · 오른쪽으로 밀면 알아요, 왼쪽은 몰라요</p>
+  <p class="hint keyhint"><kbd>←</kbd> 몰라요 · <kbd>Space</kbd> 뒤집기 · <kbd>→</kbd> 알아요</p>`;
 }
 function flipCard(){
   const s = sessions.cards; if (!s) return;
@@ -1529,7 +1718,6 @@ function fcPool(words){
 function answerCard(ok){
   const s = sessions.cards; if (!s || s.i >= s.queue.length) return;
   const id = s.queue[s.i];
-  setUnknown(wordById(id), !ok);   // 몰라요 → 모르는 단어에 저장, 알아요 → 빼기
   grade(id, ok);
   if (ok) s.known++; else s.missed.push(id);
   s.i++; s.flipped = false;
@@ -1718,6 +1906,7 @@ function viewQuiz(){
         return `<button class="choice ${cls}" data-action="qz-choose" data-idx="${i}" ${answered ? 'disabled' : ''}><span class="k">${i + 1}</span><span>${esc(c)}</span></button>`;
       }).join('')}
     </div>
+    ${answered ? '' : '<p class="hint keyhint"><kbd>1</kbd>~<kbd>4</kbd> 숫자 키로 고를 수 있어요</p>'}
     ${answered ? `<div class="row end"><button class="btn" data-action="qz-speak" aria-label="발음 듣기">${ICON.speaker}</button><button class="btn primary" data-action="qz-next" id="qzNext">${s.i + 1 === s.qs.length ? '결과 보기' : '다음'}</button></div>` : ''}
   </section>`;
 }
@@ -1733,7 +1922,7 @@ function chooseQuiz(idx){
   const q = s.qs[s.i];
   s.selected = idx;
   const ok = q.choices[idx] === q.answer;
-  grade(q.id, ok);
+  grade(q.id, ok, true);
   if (ok) s.score++; else s.missed.push(q.id);
   render();
   $('qzNext')?.focus({ preventScroll: true });
@@ -1943,7 +2132,7 @@ function groupSheet(id){
         <p class="muted" style="font-size:12px">한 단어장을 여러 그룹에 넣을 수 있어요. 예: 1~4과는 중간고사, 1~8과는 기말고사</p>
       </div>
       <div class="row split" id="groupActions">
-        ${g ? '<button type="button" class="btn danger" data-action="group-delete-ask">그룹 삭제</button>' : '<span></span>'}
+        ${g ? '<button type="button" class="btn danger" data-action="group-delete">그룹 삭제</button>' : '<span></span>'}
         <div class="row"><button type="button" class="btn" data-action="sheet-close">취소</button><button class="btn primary" type="submit">${g ? '저장' : '만들기'}</button></div>
       </div>
     </form>`);
@@ -2060,7 +2249,11 @@ const actions = {
   'tab': a => {
     // 단어장 탭을 다시 누르면 목록으로 돌아감
     if (a.dataset.view === 'words' && view === 'words') { deckOpen = false; picking = false; navStack = []; }
-    view = a.dataset.view; window.scrollTo(0, 0); render();
+    let to = a.dataset.view;
+    // 학습 탭: 다른 탭에서 넘어올 때 풀던 문제가 있으면 그 화면으로, 학습 안에서 누르면 모드 고르기로
+    if (to === 'study' && !MODES[view] && view !== 'study' && MODES[lastMode] && sessionLive(lastMode)) to = lastMode;
+    if (MODES[to]) lastMode = to;
+    view = to; window.scrollTo(0, 0); render();
   },
   'open-deck': a => {
     if (deckOpen && view === 'words') { if (db.settings.currentDeck !== a.dataset.id) navStack.push(db.settings.currentDeck); }
@@ -2083,6 +2276,11 @@ const actions = {
       <li><button class="rowbtn" data-action="group-new"><span class="rowicon grp" aria-hidden="true">${ICON.folder}</span><span class="rowmain"><span class="rowname">새 그룹</span><span class="rowmeta"><span>단어장 여러 개를 묶어요 (예: 중간고사)</span></span></span>${CHEV}</button></li>
       <li><button class="rowbtn" data-action="csv-pick" data-target="new"><span class="rowicon deck" aria-hidden="true">CSV</span><span class="rowmain"><span class="rowname">CSV 파일로 만들기</span><span class="rowmeta"><span>엑셀·구글 시트에서 불러와요</span></span></span>${CHEV}</button></li>
     </ul>`, true),
+  'cal-move': a => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + Number(a.dataset.d), 1); calPick = null; render(); },
+  'cal-pick': a => { calPick = calPick === a.dataset.id ? null : a.dataset.id; render(); },
+  'scope-open': () => scopeSheet(),
+  'scope-pick': a => { db.settings.currentDeck = a.dataset.id; navStack = []; searchText = ''; save(); resetSessions(); closeSheet(); render(); },
+  'word-filter': a => { wordFilter = a.dataset.f; render(); },
   'pick-start': () => {
     picking = true;
     picked = new Set(db.settings.currentDeck === 'multi' ? db.settings.selectedDecks : []);
@@ -2113,18 +2311,20 @@ const actions = {
   'speak-word': a => { const w = wordById(a.dataset.id); if (w) speakWord(w); },
   'edit-word': a => editSheet(a.dataset.id),
   'sheet-close': () => closeSheet(),
-  'study-unk': () => { opts.fcSource = 'all'; view = 'cards'; window.scrollTo(0, 0); render(); },
+  'study-unk': () => { opts.fcSource = 'all'; view = 'cards'; lastMode = 'cards'; window.scrollTo(0, 0); render(); },
   'group-new': () => groupSheet(null),
   'group-edit': a => groupSheet(a.dataset.id),
-  'group-delete-ask': () => {
-    $('groupActions').innerHTML = `<p style="flex:1;min-width:0">이 그룹을 삭제할까요? 안의 단어장과 단어는 그대로 남아요.</p>
-      <div class="row"><button type="button" class="btn" data-action="sheet-close">취소</button><button type="button" class="btn bad" data-action="group-delete-confirm">삭제</button></div>`;
-  },
-  'group-delete-confirm': () => {
+  'group-delete': () => {
     const id = $('groupForm').dataset.id;
-    db.groups = db.groups.filter(g => g.id !== id);
+    const g = groupById(id); if (!g) return;
+    db.groups = db.groups.filter(x => x.id !== id);
     if (db.settings.currentDeck === 'group:' + id) { db.settings.currentDeck = 'all'; deckOpen = false; }
-    save(); closeSheet(); resetSessions(); render(); toast('그룹을 삭제했어요');
+    save(); closeSheet(); resetSessions(); render();
+    toast(`'${g.name}' 그룹을 삭제했어요`, 6000, () => {
+      if (groupById(g.id)) return;
+      g.deckIds = g.deckIds.filter(x => deckById(x)); g.updatedAt = Date.now(); db.groups.push(g);
+      save(); render(); toast('되돌렸어요');
+    });
   },
   'unknown-clear': a => {
     const w = wordById(a.dataset.id); if (!w) return;
@@ -2172,14 +2372,16 @@ const actions = {
     inp.focus(); inp.setSelectionRange(st + 1, st + 1);
     inp.dispatchEvent(new Event('input', { bubbles: true }));
   },
-  'delete-word-ask': () => {
-    $('editActions').innerHTML = `<p style="flex:1;min-width:0">이 단어를 삭제할까요? 되돌릴 수 없어요.</p>
-      <div class="row"><button type="button" class="btn" data-action="sheet-close">취소</button><button type="button" class="btn bad" data-action="delete-word-confirm">삭제</button></div>`;
-  },
-  'delete-word-confirm': () => {
+  'delete-word': () => {
     const id = $('editForm').dataset.id;
-    db.words = db.words.filter(w => w.id !== id);
-    save(); closeSheet(); resetSessions(); render(); toast('삭제했어요');
+    const i = db.words.findIndex(w => w.id === id); if (i < 0) return;
+    const [w] = db.words.splice(i, 1);
+    save(); closeSheet(); resetSessions(); render();
+    toast(`'${w.term}'을(를) 삭제했어요`, 6000, () => {
+      if (wordById(w.id) || !deckById(w.deckId)) return;
+      w.updatedAt = Date.now(); db.words.push(w);
+      save(); resetSessions(); render(); toast('되돌렸어요');
+    });
   },
   'reset-word': () => {
     const w = wordById($('editForm').dataset.id); if (!w) return;
@@ -2272,7 +2474,8 @@ const actions = {
     const s = sessions.mean; if (!s || !s.answered || s.ok) return;
     const id = s.queue[s.i]; const w = wordById(id);
     if (w && s.snap) Object.assign(w, s.snap);   // 틀림으로 기록된 것을 되돌리고
-    grade(id, true);                              // 맞음으로 다시 기록
+    grade(id, true, true, true);                  // 맞음으로 다시 기록 (학습 기록에는 한 번만)
+    setUnknown(w, false);
     s.ok = true; s.overridden = true; s.score++;
     s.missed = s.missed.filter(x => x !== id);
     render(); $('mnNext')?.focus({ preventScroll: true });
@@ -2328,16 +2531,27 @@ const actions = {
     const d = deckById(a.dataset.id); if (!d) return;
     const n = db.words.filter(w => w.deckId === d.id).length;
     openSheet(`<h2 style="font-size:20px">'${esc(d.name)}' 단어장을 삭제할까요?</h2>
-      <p>안에 있는 단어 <b class="num">${n}</b>개도 함께 지워지고 되돌릴 수 없어요.</p>
+      <p>안에 있는 단어 <b class="num">${n}</b>개도 함께 지워져요.</p>
       <div class="row end"><button class="btn" data-action="sheet-close">취소</button><button class="btn bad" data-action="deck-delete-confirm" data-id="${d.id}">삭제</button></div>`);
   },
   'deck-delete-confirm': a => {
     const id = a.dataset.id;
+    const deck = deckById(id); if (!deck) return;
+    const gone = db.words.filter(w => w.deckId === id);
+    const inGroups = db.groups.filter(g => g.deckIds.includes(id)).map(g => g.id);
     db.decks = db.decks.filter(d => d.id !== id);
     db.words = db.words.filter(w => w.deckId !== id);
     if (db.settings.currentDeck === id) db.settings.currentDeck = 'all';
     fillDefaults(db); picked.delete(id);
-    save(); closeSheet(); resetSessions(); render(); toast('단어장을 삭제했어요');
+    save(); closeSheet(); resetSessions(); render();
+    toast(`'${deck.name}' 단어장을 삭제했어요`, 8000, () => {
+      if (deckById(deck.id)) return;
+      const now = Date.now();
+      deck.updatedAt = now; db.decks.push(deck);
+      gone.forEach(w => { w.updatedAt = now; db.words.push(w); });
+      inGroups.forEach(gid => { const g = groupById(gid); if (g && !g.deckIds.includes(deck.id)) { g.deckIds.push(deck.id); g.updatedAt = now; } });
+      save(); resetSessions(); render(); toast('되돌렸어요');
+    });
   },
   'speak-test': a => {
     const sample = { 'en-US':'Hello, nice to meet you.', 'en-GB':'Hello, nice to meet you.', 'hr-HR':'Dobar dan, drago mi je.', 'sr-RS':'Dobar dan, drago mi je.', 'ja-JP':'こんにちは', 'zh-CN':'你好', 'es-ES':'Hola, mucho gusto.', 'fr-FR':'Bonjour, enchanté.', 'de-DE':'Hallo, freut mich.' };
@@ -2498,7 +2712,7 @@ document.addEventListener('change', e => {
     if (e.target.id !== 'csvName') renderCsvSheet();
     return;
   }
-  if (e.target.id === 'deckSelect') { db.settings.currentDeck = e.target.value; save(); resetSessions(); render(); }
+  if (e.target.id === 'wordSort') { db.settings.wordSort = e.target.value; save(); $('wordList').innerHTML = wordItems(currentWords()); }
   if (e.target.classList.contains('decklang')) { const d = deckById(e.target.dataset.id); if (d) { d.lang = e.target.value; d.updatedAt = Date.now(); save(); toast(`'${d.name}' 언어를 바꿨어요`); } }
   if (e.target.id === 'fDeck') { lastLooked = ''; syncAddLang(); }
   if (e.target.id === 'fTerm') { clearTimeout(lookTimer); if (!$('fMeaning').value.trim() || $('fMeaning').value === autoMeaning) lookupSingle(true); }
@@ -2528,6 +2742,11 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !$('sheet').hidden) { if (!$('sheet').dataset.lock) closeSheet(); return; }
   const tag = (e.target.tagName || '').toLowerCase();
   if (tag === 'input' || tag === 'textarea' || tag === 'select' || !$('sheet').hidden) return;
+  if (e.key === 'Enter' && MODES[view] && tag !== 'button' && tag !== 'a') {
+    // 시작 화면과 결과 화면: 엔터로 바로 시작
+    const go = $('view').querySelector('.btn.primary:not(:disabled)');
+    if (go && !sessionLive(view)) { e.preventDefault(); go.click(); return; }
+  }
   if (view === 'cards' && sessions.cards && sessions.cards.i < sessions.cards.queue.length) {
     if (e.key === 'ArrowRight') answerCard(true);
     else if (e.key === 'ArrowLeft') answerCard(false);

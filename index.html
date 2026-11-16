@@ -854,6 +854,11 @@ const GROUP_KEYS = ['name', 'examDate', 'deckIds', 'createdAt', 'updatedAt'];
 const WORD_KEYS = ['deckId', 'term', 'meaning', 'example', 'note', 'box', 'nextReview', 'correct', 'wrong', 'unknown', 'createdAt', 'updatedAt'];
 const pickDoc = (kind, o) => { const keys = kind === 'decks' ? DECK_KEYS : kind === 'groups' ? GROUP_KEYS : kind === 'days' ? DAY_KEYS : kind === 'cardStates' ? CARD_KEYS : WORD_KEYS; const r = {}; keys.forEach(k => { if (o[k] !== undefined) r[k] = o[k]; }); return r; };
 const docKey = (kind, id) => kind + '/' + id;
+// 바뀐 것만 받기: 기기마다 '어디까지 받았는지(since)'를 기억해 두고, 다음에 열 때 그 뒤로 바뀐 문서만 받음
+const META_KEY = 'vocab-sync-meta';          // { uid, since, cleanedAt, pend: { 'words/id': 'set' | 'del' } }
+const SYNC_MARGIN = 10 * 60000;              // 기기 시계 차이를 감안해 10분 겹쳐서 받음
+const FULL_AFTER = 4 * 86400000;             // 4일 넘게 서버와 못 맞춘 기기는 전체를 다시 받음
+const TOMB_KEEP = 5 * 86400000;              // 지움 표시는 5일 보관 후 정리
 function lsGet(k){ try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v){ try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
 
@@ -863,8 +868,13 @@ const Sync = {
   loadFailed: false,
   user: null,               // { uid, email }
   phase: 'off',             // off | waiting(서버 첫 응답 기다림) | choose(합치기 질문 중) | live
-  mode: null,               // 'first'(이 기기 첫 연결) | 'resume'(이미 연결된 기기)
+  mode: null,               // 'first'(이 기기 첫 연결) | 'resume'(이미 연결된 기기, 전체 받기) | 'delta'(바뀐 것만 받기)
+  meta: null,               // META_KEY에 저장되는 이 기기의 동기화 기록
+  serverAt: {},             // 목록별로 서버와 마지막으로 맞춘 시각 (이 기기 시계)
+  pendGen: {},              // 올린 뒤 확인을 기다리는 문서 → 몇 번째 올리기였는지
+  tombed: new Set(),        // 이번에 지운 문서 (다시 살릴 때 지움 표시를 걷기 위함)
   synced: new Map(),        // 서버와 맞춘 상태: 'words/id' → JSON
+  mine: new Map(),          // 이 탭이 쓴 내용: 'words/id' → Set(JSON | '∅'(삭제)). 되돌아온 내 쓰기를 알아보는 데 씀
   remote: Object.fromEntries(KINDS.map(k => [k, new Map()])),   // 서버(와 Firestore 캐시)가 보는 상태
   off: {},                  // OPTIONAL_KINDS 중 서버가 거부한 목록 (이 기기에만 둠)
   seen: Object.fromEntries(KINDS.map(k => [k, null])), // 받은 스냅샷: null | 'cache' | 'server'
@@ -889,47 +899,121 @@ const Sync = {
     this.user = u ? { uid: u.uid, email: u.email || '' } : null;
     this.error = '';
     if (!u) { this.phase = 'off'; this.changed(true); return; }
-    this.mode = lsGet(LINK_KEY) === u.uid ? 'resume' : 'first';
+    this.meta = this.loadMeta(u.uid);
+    const linked = lsGet(LINK_KEY) === u.uid;
+    // 이 기기가 최근(4일 안)에 서버와 맞춘 적이 있으면 바뀐 것만, 아니면 전체를 받음
+    const fresh = this.meta.since && Date.now() - this.meta.since < FULL_AFTER;
+    if (linked && fresh && this.adapter.version >= 2) {
+      this.mode = 'delta';
+      this.start(this.meta.since - SYNC_MARGIN);
+      this.goLiveDelta();
+      return;
+    }
+    this.mode = linked ? 'resume' : 'first';
     this.phase = 'waiting';
     this.baseline = this.mode === 'resume' ? snapshotMap() : null;
     this.start();
     this.changed(true);
   },
+  loadMeta(uid){
+    let m = null;
+    try { m = JSON.parse(lsGet(META_KEY) || 'null'); } catch (e) {}
+    if (!m || m.uid !== uid) m = { uid, since: 0, cleanedAt: 0, pend: {} };
+    if (!m.pend || typeof m.pend !== 'object') m.pend = {};
+    return m;
+  },
+  saveMeta(){ if (this.meta) lsSet(META_KEY, JSON.stringify(this.meta)); },
+  // 바뀐 것만 받기로 시작: 이 기기에 저장된 단어장을 그대로 쓰고 곧바로 동기화 시작
+  goLiveDelta(){
+    const s = snapshotMap();
+    // 지난번에 올렸지만 서버 확인을 못 받은 것은 다시 올림 (같은 내용을 두 번 써도 결과는 같음)
+    Object.entries(this.meta.pend).forEach(([k, how]) => { if (how === 'del') s.set(k, '"-"'); else s.delete(k); });
+    this.synced = s;
+    this.phase = 'live'; this.baseline = null;
+    if (!db.decks.length) db.decks.push({ id: uid(), name: '내 단어장', lang: 'en-US', createdAt: Date.now(), updatedAt: Date.now() });
+    this.push();
+    ReviewLog.flush();
+    this.changed(true);
+  },
   stop(){
     this.unsub.forEach(f => { try { f(); } catch (e) {} });
     this.unsub = []; this.stamp++;
-    this.phase = 'off'; this.synced = new Map(); this.baseline = null;
+    this.phase = 'off'; this.synced = new Map(); this.mine = new Map(); this.baseline = null;
     this.remote = Object.fromEntries(KINDS.map(k => [k, new Map()]));
     this.seen = Object.fromEntries(KINDS.map(k => [k, null]));
     this.off = {};
     this.cacheUsable = null;
+    this.meta = null; this.serverAt = {}; this.pendGen = {}; this.marked = false; this.tombed = new Set();
   },
-  start(){
+  // since가 있으면 그 뒤로 바뀐 것만 받고, 지움 표시(deletions)도 함께 받음
+  listenKinds(){ return this.since ? [...KINDS, 'deletions'] : KINDS; },
+  start(since){
     const stamp = this.stamp, uid = this.user.uid;
-    KINDS.forEach(kind => {
-      const optional = OPTIONAL_KINDS.includes(kind);
+    this.since = since || 0;
+    this.listenKinds().forEach(kind => {
+      if (!this.remote[kind]) this.remote[kind] = new Map();
+      const optional = OPTIONAL_KINDS.includes(kind) || kind === 'deletions';
       const offKind = err => { this.off[kind] = true; console.warn(kind + ' sync off', err); this.onSnap(kind, { fromCache: false, changes: [] }); };
       try { this.unsub.push(this.adapter.listen(uid, kind,
         snap => { if (stamp === this.stamp) this.onSnap(kind, snap); },
         err => {
           if (stamp !== this.stamp) return;
           // 학습 기록은 없어도 되는 정보: 이 목록만 막혀 있으면 빈 것으로 치고 단어 동기화는 그대로 진행
+          if (kind === 'deletions' && this.meta) { this.meta.since = 0; this.saveMeta(); }   // 지움 표시를 못 받으면 다음엔 전체 받기
           if (optional) { offKind(err); return; }
           this.fail(err);
-        })); }
+        }, this.since)); }
       catch (err) { if (optional) setTimeout(() => { if (stamp === this.stamp) offKind(err); }, 0); else throw err; }
     });
+  },
+
+  restartDelta(){
+    if (this.since || !(this.adapter.version >= 2) || !this.meta || !this.meta.since) return;   // 예전 연결부면 계속 전체 받기
+    this.unsub.forEach(f => { try { f(); } catch (e) {} });
+    this.unsub = []; this.stamp++;
+    this.start(this.meta.since - SYNC_MARGIN);
+  },
+  // 모든 목록이 서버와 맞으면: 기록해 두고, 하루 한 번 오래된 지움 표시를 정리
+  noteServer(kind, snap){
+    if (snap.fromCache || this.phase !== 'live' || !this.meta) return;
+    this.serverAt[kind] = Date.now();
+    this.evalServer();
+  },
+  evalServer(){
+    if (this.phase !== 'live' || !this.meta) return;
+    const kinds = this.listenKinds().filter(k => !this.off[k]);
+    if (!kinds.every(k => this.serverAt[k])) return;
+    const t = Math.min(...kinds.map(k => this.serverAt[k]));
+    if (t > (this.meta.since || 0)) { this.meta.since = t; clearTimeout(this._metaT); this._metaT = setTimeout(() => this.saveMeta(), 1000); }
+    if (!this.marked) {
+      this.marked = true;
+      if (this.mode !== 'delta') { this.meta.pend = {}; this.saveMeta(); this.restartDelta(); }
+      this.cleanupTombs();
+    }
+  },
+  cleanupTombs(){
+    if (!this.adapter.cleanup || Date.now() - (this.meta.cleanedAt || 0) < 86400000) return;
+    const uidv = this.user.uid, stamp = this.stamp;
+    this.adapter.cleanup(uidv, Date.now() - TOMB_KEEP)
+      .then(n => { if (this.meta && this.user && this.user.uid === uidv) { this.meta.cleanedAt = Date.now(); this.saveMeta(); if (n) console.info('지움 표시 정리', n); } })
+      .catch(err => console.warn('지움 표시 정리 실패', err));
   },
 
   /* ---- 서버에서 받은 변경 ---- */
   onSnap(kind, snap){
     // snap: { fromCache, changes: [{ type: 'added'|'modified'|'removed', id, data, pending }] }
+    if (kind === 'deletions') {
+      if (this.seen[kind] !== 'server') this.seen[kind] = snap.fromCache ? 'cache' : 'server';
+      if (this.phase === 'live') this.applyDeletions(snap.changes);
+      this.noteServer(kind, snap);
+      return;
+    }
     const map = this.remote[kind];
     snap.changes.forEach(c => { if (c.type === 'removed') map.delete(c.id); else map.set(c.id, c.data); });
     if (this.seen[kind] !== 'server') this.seen[kind] = snap.fromCache ? 'cache' : 'server';
     this.online = !snap.fromCache || navigator.onLine;
 
-    if (this.phase === 'live') { this.applyChanges(kind, snap.changes); this.changed(); return; }
+    if (this.phase === 'live') { this.applyChanges(kind, snap.changes); this.noteServer(kind, snap); this.changed(); return; }
     if (this.phase !== 'waiting') return;
     const bothServer = KINDS.every(k => this.seen[k] === 'server');
     const bothAny = KINDS.every(k => this.seen[k]);
@@ -951,10 +1035,16 @@ const Sync = {
     if (!db[kind]) db[kind] = [];
     const list = db[kind];
     changes.forEach(c => {
-      if (c.pending) return;   // 이 기기가 쓴 내용이 되돌아온 것
       const key = docKey(kind, c.id);
+      // 아직 서버가 확인하지 않은 변경(pending) 중 이 탭이 쓴 것은 무시.
+      // 같은 브라우저의 다른 탭은 저장소를 함께 써서 그 탭의 쓰기도 pending으로 보이므로, 내 것이 아니면 반영함
+      const sig = c.type === 'removed' ? '∅' : JSON.stringify(pickDoc(kind, c.data));
+      const mine = this.mine.get(key);
+      if (c.pending) { if (mine && mine.has(sig)) return; }
+      else if (mine) this.mine.delete(key);   // 서버가 확인함
       const idx = list.findIndex(x => x.id === c.id);
       if (c.type === 'removed') {
+        if (this.since) return;   // 바뀐 것만 받을 때는 지움 표시(deletions)로만 지움
         this.synced.delete(key);
         if (idx >= 0) { list.splice(idx, 1); dirty = true; }
         return;
@@ -971,6 +1061,21 @@ const Sync = {
     });
     if (dirty) afterRemoteData();
     if (repush) this.push();
+  },
+
+  // 다른 기기에서 지운 것: 지운 뒤에 이 기기에서 다시 고친 것이 아니면 지움
+  applyDeletions(changes){
+    let dirty = false;
+    changes.forEach(c => {
+      if (c.type === 'removed' || !c.data || !KINDS.includes(c.data.kind)) return;
+      const { kind, id, at } = c.data, list = db[kind] || [];
+      const idx = list.findIndex(x => x.id === id);
+      if (idx >= 0 && (list[idx].updatedAt || 0) > (at || 0)) return;
+      if (this.meta && this.meta.pend[docKey(kind, id)] === 'set') return;   // 이 기기에서 살려서 올리는 중
+      this.synced.delete(docKey(kind, id));
+      if (idx >= 0) { list.splice(idx, 1); dirty = true; }
+    });
+    if (dirty) afterRemoteData();
   },
 
   /* 이 기기를 처음 계정에 연결할 때 */
@@ -1019,6 +1124,12 @@ const Sync = {
     const edits = [];
     now.forEach((json, key) => { if (local.get(key) !== json) edits.push([key, json]); });
     local.forEach((json, key) => { if (!now.has(key)) edits.push([key, null]); });
+    // 지난번에 올렸지만 서버 확인을 못 받은 것도 이 기기 쪽을 남김
+    Object.entries((this.meta && this.meta.pend) || {}).forEach(([key, how]) => {
+      if (edits.some(e => e[0] === key)) return;
+      if (how === 'del') { if (!now.has(key)) edits.push([key, null]); }
+      else if (now.has(key)) edits.push([key, now.get(key)]);
+    });
     this.useCloud();
     edits.forEach(([key, json]) => {
       const [kind, id] = key.split('/'); const list = db[kind]; const idx = list.findIndex(x => x.id === id);
@@ -1039,6 +1150,9 @@ const Sync = {
     afterRemoteData();
     this.push();
     ReviewLog.flush();
+    // 기다리는 동안 이미 서버에서 받은 목록은 맞춘 것으로 기록
+    KINDS.forEach(k => { if (this.seen[k] === 'server') this.serverAt[k] = Date.now(); });
+    this.evalServer();
     this.changed(true);
   },
 
@@ -1047,24 +1161,51 @@ const Sync = {
     if (this.phase !== 'live' || !this.adapter || !this.user) return;
     const ops = [];
     const now = snapshotMap();
+    let bumped = false;
     now.forEach((json, key) => {
-      if (this.synced.get(key) === json) return;
+      const was = this.synced.get(key);
+      if (was === json) return;
       const [kind, id] = key.split('/');
       if (this.off[kind]) return;
-      ops.push({ kind, id, data: JSON.parse(json) });
+      // 내용이 바뀌었는데 updatedAt이 그대로면 올려 줌 (다른 기기의 '나중에 고친 쪽 남기기'가 맞게 동작하도록)
+      let data = JSON.parse(json);
+      let prevAt = 0; try { prevAt = was && was !== '"-"' ? (JSON.parse(was).updatedAt || 0) : 0; } catch (e) {}
+      if (!data.updatedAt || data.updatedAt <= prevAt) {
+        const item = (db[kind] || []).find(x => x.id === id);
+        if (item) { item.updatedAt = Math.max(Date.now(), prevAt + 1); data = pickDoc(kind, item); bumped = true; }
+      }
+      ops.push({ kind, id, data, track: true, untomb: this.tombed.has(key) || !!(this.meta && this.meta.pend[key] === 'del') || was === '"-"' });
+      this.tombed.delete(key);
     });
     this.synced.forEach((json, key) => {
       if (now.has(key)) return;
       const [kind, id] = key.split('/');
       if (this.off[kind]) return;
-      ops.push({ kind, id, data: null });
+      ops.push({ kind, id, data: null, track: true });
+      this.tombed.add(key);   // 이번에 지운 것: 다시 살리면 지움 표시도 걷음
     });
+    if (bumped) Store.save(db);
     if (!ops.length) return;
-    ops.forEach(o => { const k = docKey(o.kind, o.id); o.data ? this.synced.set(k, JSON.stringify(o.data)) : this.synced.delete(k); });
+    // 서버 확인을 받을 때까지 기억 (앱이 꺼져도 다음에 다시 올리도록)
+    const gen = this.pendGen._n = (this.pendGen._n || 0) + 1;
+    if (this.meta) { ops.forEach(o => { const k = docKey(o.kind, o.id); this.meta.pend[k] = o.data ? 'set' : 'del'; this.pendGen[k] = gen; }); this.saveMeta(); }
+    ops.forEach(o => {
+      const k = docKey(o.kind, o.id), json = o.data ? JSON.stringify(o.data) : null;
+      json ? this.synced.set(k, json) : this.synced.delete(k);
+      if (!this.mine.has(k)) this.mine.set(k, new Set());
+      this.mine.get(k).add(json || '∅');
+    });
     const stamp = this.stamp;
     this.inflight++; this.changed();
+    const meta = this.meta;
     this.adapter.commit(this.user.uid, ops)
-      .then(() => { if (stamp === this.stamp) this.error = ''; })
+      .then(() => {
+        if (meta && meta === this.meta) {
+          ops.forEach(o => { const k = docKey(o.kind, o.id); if (this.pendGen[k] === gen) { delete meta.pend[k]; delete this.pendGen[k]; } });
+          this.saveMeta();
+        }
+        if (stamp === this.stamp) this.error = '';
+      })
       .catch(err => { if (stamp === this.stamp) this.fail(err); })
       .finally(() => { this.inflight = Math.max(0, this.inflight - 1); this.changed(); });
   },
@@ -1909,7 +2050,9 @@ const ReviewLog = {
   KEY: 'vocab-log-outbox',
   MAX: 5000,                 // 오래 못 보내도 이 기기 저장 공간이 넘치지 않게
   box: null, busy: false,
-  load(){ if (!this.box) { try { this.box = JSON.parse(lsGet(this.KEY) || '[]'); } catch (e) { this.box = []; } if (!Array.isArray(this.box)) this.box = []; } return this.box; },
+  // 같은 브라우저의 다른 탭도 이 목록을 쓰므로 매번 저장소에서 다시 읽음
+  load(){ try { this.box = JSON.parse(lsGet(this.KEY) || '[]'); } catch (e) { this.box = []; } if (!Array.isArray(this.box)) this.box = []; return this.box; },
+  sig: x => x.id + (x.data ? '' : '#del'),
   keep(){ lsSet(this.KEY, this.box.length ? JSON.stringify(this.box) : null); },
   add(id, data){
     if (!Sync.configured) return;          // 계정 연결 없이 쓰는 앱이면 쌓지 않음
@@ -1929,7 +2072,7 @@ const ReviewLog = {
     const sent = b.slice(0, 400);
     this.busy = true;
     Sync.adapter.commit(Sync.user.uid, sent.map(x => ({ kind: 'reviewLogs', id: x.id, data: x.data })))
-      .then(() => { this.box = this.load().filter(x => !sent.includes(x)); this.keep(); this.busy = false; if (this.box.length) this.flush(); })
+      .then(() => { const done = new Set(sent.map(this.sig)); this.box = this.load().filter(x => !done.has(this.sig(x))); this.keep(); this.busy = false; if (this.box.length) this.flush(); })
       .catch(err => { this.busy = false; console.warn('review log upload failed (will retry later)', err); });
   },
 };

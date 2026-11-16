@@ -824,6 +824,7 @@ let saveTimer = null, saveWarned = false;
 function doSave(){
   saveTimer = null;
   if (!Store.save(db) && !saveWarned && !Sync.user) { saveWarned = true; toast('이 화면에서는 저장이 되지 않아요. 설정의 백업으로 내용을 옮겨 두세요.', 4500); }
+  Sync.noteOffline();
   Sync.push();
 }
 function save(){ clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 250); }
@@ -855,8 +856,11 @@ const WORD_KEYS = ['deckId', 'term', 'meaning', 'example', 'note', 'box', 'nextR
 const pickDoc = (kind, o) => { const keys = kind === 'decks' ? DECK_KEYS : kind === 'groups' ? GROUP_KEYS : kind === 'days' ? DAY_KEYS : kind === 'cardStates' ? CARD_KEYS : WORD_KEYS; const r = {}; keys.forEach(k => { if (o[k] !== undefined) r[k] = o[k]; }); return r; };
 const docKey = (kind, id) => kind + '/' + id;
 // 바뀐 것만 받기: 기기마다 '어디까지 받았는지(since)'를 기억해 두고, 다음에 열 때 그 뒤로 바뀐 문서만 받음
-const META_KEY = 'vocab-sync-meta';          // { uid, since, cleanedAt, pend: { 'words/id': 'set' | 'del' } }
-const SYNC_MARGIN = 10 * 60000;              // 기기 시계 차이를 감안해 10분 겹쳐서 받음
+const META_KEY = 'vocab-sync-meta';          // { v, uid, since, fullAt, cleanedAt, pend: { 'words/id': 'set' | 'del' } }
+const META_V = 3;                            // 동기화 방식이 바뀌면 올림 → 기기마다 전체를 한 번 다시 받음
+const ADAPTER_V = 3;                         // firebase-sync.js가 이 버전 이상이어야 바뀐 것만 받기를 씀
+const SYNC_MARGIN = 60 * 60000;              // 기기 시계와 서버 시계 차이를 감안해 1시간 겹쳐서 받음
+const FULL_EVERY = 7 * 86400000;             // 안전망: 일주일에 한 번은 전체를 다시 받아 서버와 완전히 맞춤
 const FULL_AFTER = 4 * 86400000;             // 4일 넘게 서버와 못 맞춘 기기는 전체를 다시 받음
 const TOMB_KEEP = 5 * 86400000;              // 지움 표시는 5일 보관 후 정리
 function lsGet(k){ try { return localStorage.getItem(k); } catch (e) { return null; } }
@@ -902,8 +906,8 @@ const Sync = {
     this.meta = this.loadMeta(u.uid);
     const linked = lsGet(LINK_KEY) === u.uid;
     // 이 기기가 최근(4일 안)에 서버와 맞춘 적이 있으면 바뀐 것만, 아니면 전체를 받음
-    const fresh = this.meta.since && Date.now() - this.meta.since < FULL_AFTER;
-    if (linked && fresh && this.adapter.version >= 2) {
+    const fresh = this.meta.since && Date.now() - this.meta.since < FULL_AFTER && Date.now() - (this.meta.fullAt || 0) < FULL_EVERY;
+    if (linked && fresh && this.adapter.version >= ADAPTER_V) {
       this.mode = 'delta';
       this.start(this.meta.since - SYNC_MARGIN);
       this.goLiveDelta();
@@ -918,8 +922,9 @@ const Sync = {
   loadMeta(uid){
     let m = null;
     try { m = JSON.parse(lsGet(META_KEY) || 'null'); } catch (e) {}
-    if (!m || m.uid !== uid) m = { uid, since: 0, cleanedAt: 0, pend: {} };
+    if (!m || m.uid !== uid) m = { v: META_V, uid, since: 0, fullAt: 0, cleanedAt: 0, pend: {} };
     if (!m.pend || typeof m.pend !== 'object') m.pend = {};
+    if (m.v !== META_V) { m.v = META_V; m.since = 0; m.fullAt = 0; }   // 예전 방식으로 맞춘 기록은 버리고 전체를 한 번 받음
     return m;
   },
   saveMeta(){ if (this.meta) lsSet(META_KEY, JSON.stringify(this.meta)); },
@@ -936,6 +941,7 @@ const Sync = {
     this.changed(true);
   },
   stop(){
+    if (this.phase === 'live') this.offBase = snapshotMap();
     this.unsub.forEach(f => { try { f(); } catch (e) {} });
     this.unsub = []; this.stamp++;
     this.phase = 'off'; this.synced = new Map(); this.mine = new Map(); this.baseline = null;
@@ -944,6 +950,17 @@ const Sync = {
     this.off = {};
     this.cacheUsable = null;
     this.meta = null; this.serverAt = {}; this.pendGen = {}; this.marked = false; this.tombed = new Set();
+  },
+  // 동기화가 꺼져 있는 동안(로그아웃했거나 연결부를 못 불러온 때) 바뀐 것을 기억해 두었다가, 다시 연결되면 올림
+  noteOffline(){
+    if (this.phase !== 'off') return;
+    const linked = lsGet(LINK_KEY); if (!linked) return;   // 계정에 연결한 적 있는 기기만
+    const now = snapshotMap(), base = this.offBase || now;
+    const meta = this.loadMeta(linked); let ch = false;
+    now.forEach((json, key) => { if (base.get(key) !== json) { meta.pend[key] = 'set'; ch = true; } });
+    base.forEach((json, key) => { if (!now.has(key)) { meta.pend[key] = 'del'; ch = true; } });
+    this.offBase = now;
+    if (ch) lsSet(META_KEY, JSON.stringify(meta));
   },
   // since가 있으면 그 뒤로 바뀐 것만 받고, 지움 표시(deletions)도 함께 받음
   listenKinds(){ return this.since ? [...KINDS, 'deletions'] : KINDS; },
@@ -968,7 +985,7 @@ const Sync = {
   },
 
   restartDelta(){
-    if (this.since || !(this.adapter.version >= 2) || !this.meta || !this.meta.since) return;   // 예전 연결부면 계속 전체 받기
+    if (this.since || !(this.adapter.version >= ADAPTER_V) || !this.meta || !this.meta.since) return;   // 예전 연결부면 계속 전체 받기
     this.unsub.forEach(f => { try { f(); } catch (e) {} });
     this.unsub = []; this.stamp++;
     this.start(this.meta.since - SYNC_MARGIN);
@@ -987,7 +1004,7 @@ const Sync = {
     if (t > (this.meta.since || 0)) { this.meta.since = t; clearTimeout(this._metaT); this._metaT = setTimeout(() => this.saveMeta(), 1000); }
     if (!this.marked) {
       this.marked = true;
-      if (this.mode !== 'delta') { this.meta.pend = {}; this.saveMeta(); this.restartDelta(); }
+      if (this.mode !== 'delta') { this.meta.fullAt = Date.now(); this.saveMeta(); this.restartDelta(); }
       this.cleanupTombs();
     }
   },
@@ -1065,17 +1082,22 @@ const Sync = {
 
   // 다른 기기에서 지운 것: 지운 뒤에 이 기기에서 다시 고친 것이 아니면 지움
   applyDeletions(changes){
-    let dirty = false;
+    let dirty = false, repush = false;
     changes.forEach(c => {
       if (c.type === 'removed' || !c.data || !KINDS.includes(c.data.kind)) return;
-      const { kind, id, at } = c.data, list = db[kind] || [];
+      const { kind, id, at } = c.data, list = db[kind] || [], key = docKey(kind, id);
       const idx = list.findIndex(x => x.id === id);
-      if (idx >= 0 && (list[idx].updatedAt || 0) > (at || 0)) return;
-      if (this.meta && this.meta.pend[docKey(kind, id)] === 'set') return;   // 이 기기에서 살려서 올리는 중
-      this.synced.delete(docKey(kind, id));
+      if (this.meta && this.meta.pend[key] === 'set') return;   // 이 기기에서 살려서 올리는 중
+      if (idx >= 0 && (list[idx].updatedAt || 0) > (at || 0)) {
+        // 다른 기기가 지운 뒤에 이 기기에서 고친 것: 서버에서는 이미 지워졌으니 다시 올리고 지움 표시를 걷음
+        this.synced.delete(key); this.tombed.add(key); repush = true;
+        return;
+      }
+      this.synced.delete(key);
       if (idx >= 0) { list.splice(idx, 1); dirty = true; }
     });
     if (dirty) afterRemoteData();
+    if (repush) this.push();
   },
 
   /* 이 기기를 처음 계정에 연결할 때 */
@@ -1241,6 +1263,7 @@ const Sync = {
   }
 };
 window.VocabSync = Sync;
+Sync.offBase = snapshotMap();   // 앱을 연 순간의 상태 (동기화가 꺼진 동안 바뀐 것을 찾는 기준)
 window.addEventListener('online', () => { Sync.online = true; Sync.changed(); ReviewLog.flush(); });
 window.addEventListener('offline', () => { Sync.online = false; Sync.changed(); });
 if (Sync.configured) setTimeout(() => { if (!Sync.adapter && !Sync.loadFailed) Sync.failed(); }, 20000);
@@ -1340,11 +1363,6 @@ function scopeName(c){
   if (c === 'multi') return `선택한 단어장 ${(db.settings.selectedDecks || []).length}개`;
   const g = groupOf(c); if (g) return g.name;
   return deckById(c)?.name || '단어장';
-}
-function nextLabel(w){
-  if (isDue(w)) return '복습';
-  const days = Math.round((w.nextReview - startOfToday()) / DAY);
-  return days <= 1 ? '내일' : days + '일 후';
 }
 // 날짜 키: 이 기기 시간 기준 2026-11-15
 function dayKey(d = new Date()){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
@@ -1940,6 +1958,16 @@ function srsLimits(now){
   });
   return { newLeft: db.settings.newPerDay - newDone, reviewLeft: db.settings.revPerDay - revDone };
 }
+// 학습 중 카드가 돌아올 시각에 맞춰 학습 탭·복습 완료 화면을 새로 그림
+let srsTimer = null;
+function srsWake(q, now){
+  clearTimeout(srsTimer);
+  if (!q.nextAt) return;
+  srsTimer = setTimeout(() => {
+    const idle = view === 'study' || (view === 'review' && sessions.review && !sessions.review.cur);
+    if (idle && $('sheet').hidden) safeRender();
+  }, Math.min(Math.max(q.nextAt - now, 0) + 800, 3600000));
+}
 function srsQueue(now = Date.now()){
   const items = scopeCards(currentWords()), lim = srsLimits(now), ex = examInfo(now);
   if (ex && ex.days >= 1) {
@@ -1973,15 +2001,21 @@ function reviewCard(){
   const words = currentWords();
   if (!words.length) return '';
   const now = Date.now(), q = srsQueue(now);
+  srsWake(q, now);
   const learn = q.learn.length + q.later;
   if (!srsLeft(q) && !q.ahead.length) {
     const t0 = SRS.addDays(SRS.dayStart(now), 1), t1 = SRS.addDays(t0, 1);
     const ids = new Set(words.map(w => w.id));
     const tomorrow = db.cardStates.filter(c => ids.has(wid(c.id)) && c.state === 'review' && c.due >= t0 && c.due < t1).length;
+    // 내일 나올 새 카드: 시험 대비면 남은 새 카드를 남은 날로 나눈 몫, 아니면 하루 새 단어 수
+    const newLeft = scopeCards(words).filter(it => !it.card || it.card.state === 'new').length;
+    const ex = q.exam;
+    const plan = ex && ex.days >= 2 ? Math.ceil(newLeft / Math.max(1, ex.days - 3)) : 0;
+    const newTomorrow = Math.min(newLeft, Math.max(plan, db.settings.newPerDay));
     return `<section class="panel srs done">
       <div class="srshead"><h2>오늘의 복습</h2><span class="ok">오늘 복습 완료</span></div>
       ${examLine(q)}
-      <p class="hintline">${q.later ? `학습 중 카드 <b class="num">${q.later}</b>개가 ${SRS.formatInterval(q.nextAt - now)} 뒤에 다시 나와요 · ` : ''}내일 예정 <b class="num">${tomorrow}</b>개</p>
+      <p class="hintline">${q.later ? `학습 중 카드 <b class="num">${q.later}</b>개가 ${SRS.formatInterval(q.nextAt - now)} 뒤에 다시 나와요 · ` : ''}내일 예정: 복습 <b class="num">${tomorrow}</b> · 새 카드 ${newLeft ? '약 ' : ''}<b class="num">${newTomorrow}</b></p>
     </section>`;
   }
   return `<section class="panel srs">
@@ -2014,6 +2048,7 @@ function viewReview(){
   const total = s.done + left;
   const undoBtn = s.undo ? `<button class="linkbtn" data-action="srs-undo">되돌리기</button>` : '';
   if (!s.cur) {
+    srsWake(q, now);
     return `<div class="progress"><span class="num">${s.done} / ${s.done}</span><div class="bar"><i style="width:100%"></i></div>${undoBtn}</div>
     <section class="panel result">
       <h2>오늘 복습 완료</h2>
@@ -2064,7 +2099,7 @@ const ReviewLog = {
   remove(id){
     const b = this.load(), i = b.findIndex(x => x.id === id && x.data);
     // 아직 안 보낸 기록이면 그냥 빼고, 이미 보냈으면 지우기를 보냄
-    if (i >= 0) { b.splice(i, 1); this.keep(); } else this.add(id, null);
+    if (i >= 0 && !this.busy) { b.splice(i, 1); this.keep(); } else this.add(id, null);
   },
   flush(){
     const b = this.load();
@@ -3407,7 +3442,7 @@ document.addEventListener('keydown', e => {
 render();
 Sync.changed();
 </script>
-<script type="module" src="firebase-sync.js"></script>
+<script type="module" src="firebase-sync.js?v=3"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });

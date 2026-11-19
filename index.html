@@ -431,6 +431,9 @@ button,.btn,.choice,.rowname,.term,select,.input{transition:color .2s ease,borde
 .srshead{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
 .srshead h2{font-size:17px}
 .srshead .ok{font-size:13px;font-weight:600;color:var(--good)}
+.srshead .ok.cap{color:var(--muted)}
+.capl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.5}
+.capl li{padding:8px 10px;border-radius:8px;background:var(--bg);border:1px solid var(--line)}
 .srsnums{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .srsnums .stat{background:var(--bg);border-radius:10px;padding:10px 12px}
 .srs.done .hintline{margin:0}
@@ -487,7 +490,8 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);border
 
 /* 시트, 토스트, 배너 */
 .sheet{position:fixed;inset:0;z-index:20;background:rgba(10,14,20,.45);display:flex;align-items:flex-end;justify-content:center}
-.sheet .box{width:100%;max-width:640px;background:var(--surface);border-radius:16px 16px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;max-height:88vh;overflow:auto}
+.sheet .box{width:100%;max-width:640px;background:var(--surface);border-radius:16px 16px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;max-height:88vh;max-height:88dvh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.sheet .box > *{flex-shrink:0}
 @media (min-width:700px){.sheet{align-items:center}.sheet .box{border-radius:16px;padding-bottom:20px}}
 .toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translate(-50%,8px);z-index:30;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:9px;font-size:14px;max-width:calc(100% - 32px);box-shadow:var(--shadow);pointer-events:none;
   opacity:0;visibility:hidden;transition:opacity .4s ease,transform .4s ease,visibility 0s linear .4s}
@@ -752,6 +756,9 @@ const SRS = (() => {
   // 오늘 할 카드. items: [{ id, card(없으면 새 카드), after? }] 단어 순서대로
   //   after: 반대 방향 카드(뜻→단어)일 때 짝인 단어→뜻 카드. 짝을 전날까지 한 번 이상 봐야 새 카드로 나옴
   // limits: { newLeft, reviewLeft, sameDay } 오늘 남은 새 카드·복습 개수, sameDay면 짝을 오늘 봤어도 나옴
+  //   budget이 있으면 newLeft 대신 주인(단어장·그룹)별 남은 몫: { 주인: 장수 }. 각 item.owner로 나눔
+  //   extra: 주인 몫과 상관없이 더 볼 수 있는 장수 ('새 카드 더 보기')
+  //   item.sameDay: 그 카드만 sameDay처럼 (시험 막바지인 그룹)
   function buildQueue(items, now, limits, cfg = CFG){
     const ds = dayStart(now, cfg), tomorrow = addDays(ds, 1);
     const learnDue = [], learnLater = [], review = [], fresh = [], freshRev = [];
@@ -759,7 +766,7 @@ const SRS = (() => {
       const c = it.card;
       if (!c || c.state === 'new') {
         if (!('after' in it)) fresh.push(it.id);
-        else if (it.after && it.after.state !== 'new' && ((it.after.firstAt || 0) < ds || limits.sameDay)) freshRev.push(it.id);
+        else if (it.after && it.after.state !== 'new' && ((it.after.firstAt || 0) < ds || limits.sameDay || it.sameDay)) freshRev.push(it.id);
       }
       else if (c.state === 'review') { if (c.due <= now) review.push(it); }
       else if (c.due <= now) learnDue.push(it);
@@ -771,10 +778,24 @@ const SRS = (() => {
     // 새 카드: 반대 방향과 새 단어를 번갈아
     const mixed = [];
     for (let i = 0; i < Math.max(fresh.length, freshRev.length); i++) { if (i < freshRev.length) mixed.push(freshRev[i]); if (i < fresh.length) mixed.push(fresh[i]); }
+    let picked, waitingBy = {};
+    if (limits.budget) {
+      const owner = {}; items.forEach(it => { owner[it.id] = it.owner; });
+      const left = Object.assign({}, limits.budget); let extra = limits.extra || 0;
+      picked = [];
+      mixed.forEach(id => {
+        const o = owner[id];
+        if ((left[o] || 0) > 0) { left[o]--; picked.push(id); }
+        else if (extra > 0) { extra--; picked.push(id); }
+        else waitingBy[o] = (waitingBy[o] || 0) + 1;
+      });
+    } else picked = mixed.slice(0, Math.max(0, limits.newLeft));
     return {
       learn: learnDue.map(it => it.id),
       review: review.slice(0, Math.max(0, limits.reviewLeft)).map(it => it.id),
-      fresh: mixed.slice(0, Math.max(0, limits.newLeft)),
+      fresh: picked,
+      freshWaiting: mixed.length - picked.length,        // 하루 한도 때문에 오늘 못 나오는 새 카드
+      waitingBy,                                         // 그중 주인별 장수
       ahead: ahead.map(it => it.id),                     // 할 게 없을 때 당겨 올 학습 카드
       later: learnLater.length,                          // 오늘 안에 다시 나올 학습 카드 수
       nextAt: learnLater.length ? learnLater[0].card.due : 0,
@@ -853,8 +874,8 @@ const OPTIONAL_KINDS = ['days', 'cardStates'];
 const CARD_KEYS = ['state', 'due', 'interval', 'ease', 'step', 'reps', 'lapses', 'lastReviewedAt', 'firstAt', 'updatedAt'];
 // days: 날짜별 학습 기록. 문서 id가 날짜(2026-11-15), 모드별 푼 문제 수를 담음
 const DAY_KEYS = ['cards', 'dict', 'mean', 'quiz', 'srs', 'srsNew', 'srsOk', 'updatedAt'];
-const DECK_KEYS = ['name', 'lang', 'createdAt', 'updatedAt'];
-const GROUP_KEYS = ['name', 'examDate', 'deckIds', 'createdAt', 'updatedAt'];
+const DECK_KEYS = ['name', 'lang', 'newPerDay', 'createdAt', 'updatedAt'];
+const GROUP_KEYS = ['name', 'examDate', 'deckIds', 'newPerDay', 'createdAt', 'updatedAt'];
 const WORD_KEYS = ['deckId', 'term', 'meaning', 'example', 'note', 'box', 'nextReview', 'correct', 'wrong', 'unknown', 'createdAt', 'updatedAt'];
 const pickDoc = (kind, o) => { const keys = kind === 'decks' ? DECK_KEYS : kind === 'groups' ? GROUP_KEYS : kind === 'days' ? DAY_KEYS : kind === 'cardStates' ? CARD_KEYS : WORD_KEYS; const r = {}; keys.forEach(k => { if (o[k] !== undefined) r[k] = o[k]; }); return r; };
 const docKey = (kind, id) => kind + '/' + id;
@@ -1971,6 +1992,18 @@ const wid = cid => cid.endsWith(REV) ? cid.slice(0, -REV.length) : cid;
 const dirOf = cid => cid.endsWith(REV) ? 'r' : 'f';
 const activeDirs = () => db.settings.srsDir === 'term' ? ['f'] : db.settings.srsDir === 'meaning' ? ['r'] : ['f', 'r'];
 const cardState = id => db.cardStates.find(c => c.id === id);
+// 하루 새 카드 한도 때문에 멈췄을 때의 안내와 '오늘만 더 보기' 버튼
+function newCapNote(q){
+  const lines = Object.entries(q.waitingBy).map(([o, n]) => {
+    const ow = q.nb.owners[o] || {};
+    const kind = o.startsWith('g:') ? '그룹' : '단어장';
+    const what = ow.exam ? `시험 일정 몫 <span class="num">${ow.limit}</span>장` : `하루 <span class="num">${ow.limit}</span>장`;
+    return `<li><b>${esc(ownerName(o))}</b> <span class="muted">${kind}</span> · 오늘 <b class="num">${ow.today}</b>장 봄 (${what}) · 남은 새 카드 <span class="num">${n}</span></li>`;
+  }).join('');
+  return `<ul class="capl">${lines}</ul>
+    <div class="row"><button class="btn wide" data-action="srs-more" data-n="10">새 카드 10장 더</button><button class="btn wide" data-action="srs-more" data-n="20">20장 더</button></div>
+    <p class="hintline" style="margin:0">'더'는 오늘만 늘어나요. 매일 바꾸려면 설정의 단어장 관리나 그룹 편집에서 '하루 새 카드'를 정하세요.</p>`;
+}
 // 시험 대비: 학습 범위가 시험 날짜가 있는 그룹이면 켜짐
 function examInfo(now = Date.now()){
   const g = groupOf(db.settings.currentDeck);
@@ -1983,7 +2016,6 @@ function examInfo(now = Date.now()){
   const dd = Math.round((new Date(y, m - 1, d).getTime() - startOfToday()) / DAY);
   return { g, days, dd, examAt, capAt: SRS.addDays(examAt, -1) };
 }
-const srsOpts = (now = Date.now()) => { const ex = examInfo(now); return ex && ex.days >= 2 ? { capAt: ex.capAt } : {}; };
 // 범위 안 단어들의 카드 목록 (설정한 방향만)
 function scopeCards(words){
   const map = new Map(db.cardStates.map(c => [c.id, c])), dirs = activeDirs(), out = [];
@@ -1994,14 +2026,92 @@ function scopeCards(words){
   }));
   return out;
 }
-function srsLimits(now){
-  const ds = SRS.dayStart(now);
-  let newDone = 0, revDone = 0;
-  db.cardStates.forEach(c => {
-    if ((c.firstAt || 0) >= ds) newDone++;
-    else if ((c.lastReviewedAt || 0) >= ds) revDone++;
+/* ---------- 새 카드 하루 한도 ----------
+   단어마다 한도의 '주인'이 하나 있음:
+   1) 시험 대비 중인 그룹(시험이 하루 이상 남음)에 들어 있으면 그 그룹 (여러 개면 시험이 가장 이른 것)
+      → 시험 일정으로 나눈 몫과 그룹에 정한 한도 중 큰 쪽
+   2) 한도를 정한 그룹에 들어 있으면 그 그룹 → 그룹 안 단어장들이 그 몫을 함께 씀
+   3) 아니면 자기 단어장 → 단어장에 정한 한도, 안 정했으면 설정의 기본값
+   학습 범위와 상관없이 같은 몫을 씀 */
+const hasLimit = v => Number.isInteger(v) && v >= 0;
+function groupExam(g, now){
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(g.examDate || '')) return null;
+  const [y, m, d] = g.examDate.split('-').map(Number);
+  const examAt = new Date(y, m - 1, d, SRS.CFG.dayStartHour).getTime();
+  const days = Math.round((examAt - SRS.dayStart(now)) / SRS.DAY);
+  return days >= 1 ? { days, examAt, capAt: SRS.addDays(examAt, -1) } : null;
+}
+// 단어장 id → 한도 주인 ('g:그룹id' | 'd:단어장id')
+function ownerOfDeck(now){
+  const map = {}, groups = sortedGroups();
+  const exams = groups.map(g => ({ g, ex: groupExam(g, now) })).filter(x => x.ex).sort((a, b) => a.ex.examAt - b.ex.examAt);
+  db.decks.forEach(d => {
+    const ex = exams.find(x => x.g.deckIds.includes(d.id));
+    const lim = !ex && groups.find(g => hasLimit(g.newPerDay) && g.deckIds.includes(d.id));
+    map[d.id] = ex ? 'g:' + ex.g.id : lim ? 'g:' + lim.id : 'd:' + d.id;
   });
-  return { newLeft: db.settings.newPerDay - newDone, reviewLeft: db.settings.revPerDay - revDone };
+  return map;
+}
+function ownerName(o){
+  const x = o.startsWith('g:') ? groupById(o.slice(2)) : deckById(o.slice(2));
+  return x ? x.name : '';
+}
+// 주인별 오늘 몫. 결과: { ownerOf(wordId), owners: { 주인: { limit, today, left, exam } }, budget: { 주인: 남은 장수 } }
+function newBudget(now){
+  const ds = SRS.dayStart(now), deckOwner = ownerOfDeck(now);
+  const wordDeck = new Map(db.words.map(w => [w.id, w.deckId]));
+  const ownerOf = id => deckOwner[wordDeck.get(id)];
+  const owners = {};
+  const get = o => owners[o] || (owners[o] = { limit: 0, today: 0, left: 0, exam: null });
+  // 남은 새 카드: 설정한 방향 기준 (시험 몫 계산용)
+  const map = new Map(db.cardStates.map(c => [c.id, c]));
+  const dirs = activeDirs();
+  db.words.forEach(w => {
+    const o = deckOwner[w.deckId]; if (!o) return;
+    const ow = get(o);
+    dirs.forEach(d => { const c = map.get(cardId(w.id, d)); if (!c || c.state === 'new') ow.left++; });
+  });
+  db.cardStates.forEach(c => {
+    if ((c.firstAt || 0) < ds) return;
+    const o = ownerOf(wid(c.id)); if (o) get(o).today++;
+  });
+  const budget = {};
+  Object.entries(owners).forEach(([o, ow]) => {
+    if (o.startsWith('g:')) {
+      const g = groupById(o.slice(2)), ex = g && groupExam(g, now);
+      if (ex) {
+        const plan = Math.ceil((ow.left + ow.today) / Math.max(1, ex.days - 2));
+        ow.exam = { days: ex.days, plan, capAt: ex.capAt };
+        ow.limit = Math.max(plan, hasLimit(g.newPerDay) ? g.newPerDay : 0);
+      } else ow.limit = g && hasLimit(g.newPerDay) ? g.newPerDay : db.settings.newPerDay;
+    } else {
+      const d = deckById(o.slice(2));
+      ow.limit = d && hasLimit(d.newPerDay) ? d.newPerDay : db.settings.newPerDay;
+    }
+    budget[o] = Math.max(0, ow.limit - ow.today);
+  });
+  return { ownerOf, owners, budget };
+}
+// 이 카드의 시험 상한: 그 단어의 한도 주인이 시험 대비 중인 그룹이면 시험 전날
+function srsOptsFor(cid, now = Date.now()){
+  const w = wordById(wid(cid)); if (!w) return {};
+  const o = ownerOfDeck(now)[w.deckId];
+  if (!o || !o.startsWith('g:')) return {};
+  const g = groupById(o.slice(2)), ex = g && groupExam(g, now);
+  return ex && ex.days >= 2 ? { capAt: ex.capAt } : {};
+}
+// '새 카드 더 보기': 누른 순간부터 그만큼 더 나옴 (오늘만, 설정값은 그대로). 남은 장수를 돌려줌
+function extraNewLeft(now){
+  const x = db.settings.extraNew;
+  if (!x || x.day !== SRS.dayStart(now)) return 0;
+  const used = db.cardStates.filter(c => (c.firstAt || 0) >= x.since).length;
+  return Math.max(0, x.n - used);
+}
+function reviewLeftToday(now){
+  const ds = SRS.dayStart(now);
+  let revDone = 0;
+  db.cardStates.forEach(c => { if ((c.firstAt || 0) < ds && (c.lastReviewedAt || 0) >= ds) revDone++; });
+  return db.settings.revPerDay - revDone;
 }
 // 학습 중 카드가 돌아올 시각에 맞춰 학습 탭·복습 완료 화면을 새로 그림
 let srsTimer = null;
@@ -2014,19 +2124,18 @@ function srsWake(q, now){
   }, Math.min(Math.max(q.nextAt - now, 0) + 800, 3600000));
 }
 function srsQueue(now = Date.now()){
-  const items = scopeCards(currentWords()), lim = srsLimits(now), ex = examInfo(now);
-  if (ex && ex.days >= 1) {
-    // 남은 새 카드를 시험 이틀 전까지 나눠서 (하루 새 카드 수보다 적어지지는 않음)
-    const ds = SRS.dayStart(now);
-    let left = 0, today = 0;
-    items.forEach(it => { if (!it.card || it.card.state === 'new') left++; else if ((it.card.firstAt || 0) >= ds) today++; });
-    const finish = Math.max(1, ex.days - 2);
-    lim.newLeft = Math.max(lim.newLeft, Math.ceil((left + today) / finish) - today);
-    lim.reviewLeft = Infinity;           // 시험 전에는 복습 개수 제한 없음
-    lim.sameDay = ex.days <= 2;          // 막바지에는 뜻→단어 카드도 같은 날 바로
-  }
+  const items = scopeCards(currentWords()), ex = examInfo(now), nb = newBudget(now);
+  items.forEach(it => {
+    it.owner = nb.ownerOf(wid(it.id));
+    const ow = nb.owners[it.owner];
+    if (ow && ow.exam && ow.exam.days <= 2) it.sameDay = true;   // 시험 막바지: 뜻→단어 카드도 같은 날 바로
+  });
+  const lim = {
+    budget: nb.budget, extra: extraNewLeft(now),
+    reviewLeft: ex && ex.days >= 1 ? Infinity : reviewLeftToday(now),   // 시험 범위에서는 복습 개수 제한 없음
+  };
   const q = SRS.buildQueue(items, now, lim);
-  q.exam = ex;
+  q.exam = ex; q.nb = nb; q.items = items;
   return q;
 }
 // 지금 보여 줄 카드: 학습 중(때가 된 것) → 오늘 복습 → 새 단어 → 곧 돌아올 학습 카드
@@ -2052,14 +2161,21 @@ function reviewCard(){
     const t0 = SRS.addDays(SRS.dayStart(now), 1), t1 = SRS.addDays(t0, 1);
     const ids = new Set(words.map(w => w.id));
     const tomorrow = db.cardStates.filter(c => ids.has(wid(c.id)) && c.state === 'review' && c.due >= t0 && c.due < t1).length;
-    // 내일 나올 새 카드: 시험 대비면 남은 새 카드를 남은 날로 나눈 몫, 아니면 하루 새 단어 수
-    const newLeft = scopeCards(words).filter(it => !it.card || it.card.state === 'new').length;
-    const ex = q.exam;
-    const plan = ex && ex.days >= 2 ? Math.ceil(newLeft / Math.max(1, ex.days - 3)) : 0;
-    const newTomorrow = Math.min(newLeft, Math.max(plan, db.settings.newPerDay));
+    // 내일 나올 새 카드: 이 범위에 있는 주인마다 내일 몫(시험이면 남은 카드를 남은 날로 나눈 몫)을 더함
+    const leftBy = {};
+    q.items.forEach(it => { if (!it.card || it.card.state === 'new') leftBy[it.owner] = (leftBy[it.owner] || 0) + 1; });
+    const newLeft = Object.values(leftBy).reduce((a, b) => a + b, 0);
+    const newTomorrow = Object.entries(leftBy).reduce((sum, [o, n]) => {
+      const ow = q.nb.owners[o] || { limit: db.settings.newPerDay };
+      const g = o.startsWith('g:') && groupById(o.slice(2));
+      const lim = ow.exam ? Math.max(ow.exam.days >= 2 ? Math.ceil(ow.left / Math.max(1, ow.exam.days - 3)) : ow.left, g && hasLimit(g.newPerDay) ? g.newPerDay : 0) : ow.limit;
+      return sum + Math.min(n, lim);
+    }, 0);
+    const capped = q.freshWaiting > 0;
     return `<section class="panel srs done">
-      <div class="srshead"><h2>오늘의 복습</h2><span class="ok">오늘 복습 완료</span></div>
+      <div class="srshead"><h2>오늘의 복습</h2><span class="ok ${capped ? 'cap' : ''}">${capped ? '오늘 새 카드 한도 도달' : '오늘 복습 완료'}</span></div>
       ${examLine(q)}
+      ${capped ? newCapNote(q) : ''}
       <p class="hintline">${q.later ? `학습 중 카드 <b class="num">${q.later}</b>개가 ${SRS.formatInterval(q.nextAt - now)} 뒤에 다시 나와요 · ` : ''}내일 예정: 복습 <b class="num">${tomorrow}</b> · 새 카드 ${newLeft ? '약 ' : ''}<b class="num">${newTomorrow}</b></p>
     </section>`;
   }
@@ -2096,7 +2212,8 @@ function viewReview(){
     srsWake(q, now);
     return `<div class="progress"><span class="num">${s.done} / ${s.done}</span><div class="bar"><i style="width:100%"></i></div>${undoBtn}</div>
     <section class="panel result">
-      <h2>오늘 복습 완료</h2>
+      <h2>${q.freshWaiting ? '오늘 새 카드 한도 도달' : '오늘 복습 완료'}</h2>
+      ${q.freshWaiting ? newCapNote(q) : ''}
       <p class="muted">${s.done ? `이번에 <b class="num">${s.done}</b>장을 봤어요.` : '지금 할 카드가 없어요.'}${q.later ? ` 학습 중 카드 <b class="num">${q.later}</b>개가 ${SRS.formatInterval(q.nextAt - now)} 뒤에 다시 나와요.` : ''}</p>
       <div class="row end"><button class="btn primary" data-action="tab" data-view="study">학습으로</button></div>
     </section>`;
@@ -2106,7 +2223,7 @@ function viewReview(){
   const termFace = `<div class="big">${esc(w.term)}</div>`, meaningFace = `<div class="mid">${esc(w.meaning)}</div>`;
   const ex = (w.example ? `<div class="ex">${esc(w.example)}</div>` : '') + noteHtml(w);
   const label = SRS_STATE[st ? st.state : 'new'];
-  const pv = SRS.previewIntervals(st || null, now, srsOpts(now));
+  const pv = SRS.previewIntervals(st || null, now, srsOptsFor(s.cur, now));
   return `
   <div class="progress"><span class="num">${s.done} / ${total}</span><div class="bar"><i style="width:${total ? s.done / total * 100 : 0}%"></i></div>${undoBtn}</div>
   <div class="cardwrap" id="srsWrap" ${s.flipped ? '' : 'data-action="srs-show" role="button" tabindex="0" aria-label="정답 보기"'}>
@@ -2160,7 +2277,7 @@ function srsGrade(rating){
   const s = sessions.review; if (!s || !s.cur || !s.flipped) return;
   const id = s.cur, now = Date.now();
   const prev = cardState(id), before = prev ? Object.assign({}, prev) : null;
-  const next = Object.assign(SRS.schedule(prev ? pickDoc('cardStates', prev) : null, rating, now, srsOpts(now)), { id, firstAt: prev ? (prev.firstAt || now) : now, updatedAt: now });
+  const next = Object.assign(SRS.schedule(prev ? pickDoc('cardStates', prev) : null, rating, now, srsOptsFor(id, now)), { id, firstAt: prev ? (prev.firstAt || now) : now, updatedAt: now });
   if (prev) Object.assign(prev, next); else db.cardStates.push(next);
   // 학습 기록(달력): 본 카드 수, 처음 본 단어 수, 맞힌 수
   const dk = dayKey(); let d = dayById(dk); if (!d) { d = { id: dk }; db.days.push(d); }
@@ -2169,7 +2286,7 @@ function srsGrade(rating){
   const was = before || SRS.newCard();
   const logId = id + '_' + now;
   ReviewLog.add(logId, {
-    wordId: wid(id), dir: dirOf(id), rating, reviewedAt: now, exam: !!srsOpts(now).capAt,
+    wordId: wid(id), dir: dirOf(id), rating, reviewedAt: now, exam: !!srsOptsFor(id, now).capAt,
     prevState: was.state, state: next.state,
     prevInterval: was.interval || 0, interval: next.interval,
     prevEase: was.ease, ease: next.ease,
@@ -2773,6 +2890,10 @@ function groupSheet(id){
         <div class="field"><label for="gName">그룹 이름</label><input class="input" id="gName" required value="${g ? esc(g.name) : ''}" placeholder="예: 중간고사"></div>
         <div class="field"><label for="gDate">시험 날짜 (선택)</label><input class="input" id="gDate" type="date" value="${g ? esc(g.examDate) : ''}"></div>
       </div>
+      <div class="field"><label for="gNew">하루 새 카드 (선택)</label>
+        <input class="input num" id="gNew" type="number" min="0" max="999" inputmode="numeric" value="${g && hasLimit(g.newPerDay) ? g.newPerDay : ''}" placeholder="비우면 단어장마다 따로">
+        <p class="hintline" style="margin:4px 0 0">정하면 그룹 안 단어장들이 이 몫을 함께 써요. 시험 날짜가 있으면 시험 일정에 맞춘 몫과 이 값 중 큰 쪽으로 나와요.</p>
+      </div>
       <div class="field"><label>넣을 단어장</label>
         <div class="gdecks">${db.decks.map(d => `<label class="check"><input type="checkbox" name="gDeck" value="${d.id}" ${sel.has(d.id) ? 'checked' : ''}> <span>${esc(d.name)} <span class="muted num" style="font-size:12px">${db.words.filter(w => w.deckId === d.id).length}개</span></span></label>`).join('')}</div>
         <p class="muted" style="font-size:12px">한 단어장을 여러 그룹에 넣을 수 있어요. 예: 1~4과는 중간고사, 1~8과는 기말고사</p>
@@ -2825,7 +2946,7 @@ function viewSettings(){
       ${db.decks.map(d => `<li>
         <span class="name">${esc(d.name)} <span class="muted num" style="font-size:13px">${db.words.filter(w => w.deckId === d.id).length}개</span></span>
         <select class="select decklang" data-id="${d.id}" aria-label="${esc(d.name)} 언어">${langOptions(d.lang)}</select>
-        <button class="btn ghost" data-action="deck-rename" data-id="${d.id}">이름 변경</button>
+        <button class="btn ghost" data-action="deck-rename" data-id="${d.id}">편집</button>
         <button class="btn ghost danger" data-action="deck-delete-ask" data-id="${d.id}" ${db.decks.length === 1 ? 'disabled' : ''}>삭제</button>
       </li>`).join('')}
     </ul>
@@ -2834,7 +2955,7 @@ function viewSettings(){
 
   <section class="panel">
     <h3>오늘의 복습</h3>
-    <div class="setrow"><label for="srsNewIn">하루 새 단어 수</label><input class="input num" type="number" id="srsNewIn" min="0" max="999" inputmode="numeric" value="${db.settings.newPerDay}"></div>
+    <div class="setrow"><label for="srsNewIn">기본 하루 새 카드</label><input class="input num" type="number" id="srsNewIn" min="0" max="999" inputmode="numeric" value="${db.settings.newPerDay}"></div>
     <div class="setrow"><label for="srsRevIn">하루 복습 수</label><input class="input num" type="number" id="srsRevIn" min="0" max="9999" inputmode="numeric" value="${db.settings.revPerDay}"></div>
     <div class="setrow"><label>카드 방향</label>
       <div class="seg">
@@ -2842,6 +2963,7 @@ function viewSettings(){
         <button data-action="srs-dir" data-val="term" aria-pressed="${db.settings.srsDir === 'term'}">단어 → 뜻</button>
         <button data-action="srs-dir" data-val="meaning" aria-pressed="${db.settings.srsDir === 'meaning'}">뜻 → 단어</button>
       </div></div>
+    <p class="hintline">기본 하루 새 카드는 단어장마다 따로 세요. 단어장 관리의 '편집'이나 그룹 편집에서 단어장·그룹별로 바꿀 수 있어요.</p>
     <p class="hintline">양방향이면 두 방향의 복습 일정을 따로 관리해요. 뜻 → 단어 카드는 단어 → 뜻을 처음 본 다음 날부터 나와요. 이 설정은 기기마다 따로 저장돼요.</p>
   </section>
 
@@ -2943,6 +3065,13 @@ const actions = {
     </ul>`, true),
   'cal-move': a => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + Number(a.dataset.d), 1); calPick = null; render(); },
   'cal-pick': a => { calPick = calPick === a.dataset.id ? null : a.dataset.id; render(); },
+  'srs-more': a => {
+    const now = Date.now(), day = SRS.dayStart(now);
+    db.settings.extraNew = { day, n: extraNewLeft(now) + Number(a.dataset.n), since: now };
+    save(); toast(`오늘 새 카드 ${a.dataset.n}장을 더 볼 수 있어요`);
+    if (view === 'review' && sessions.review) { sessions.review.cur = null; }
+    render();
+  },
   'srs-start': () => { view = 'review'; window.scrollTo(0, 0); render(); },
   'srs-show': () => { const s = sessions.review; if (s && s.cur && !s.flipped) { s.flipped = true; render(); } },
   'srs-grade': a => srsGrade(a.dataset.r),
@@ -3212,9 +3341,14 @@ const actions = {
   // 설정
   'deck-rename': a => {
     const d = deckById(a.dataset.id); if (!d) return;
+    const o = ownerOfDeck(Date.now())[d.id], viaGroup = o && o.startsWith('g:') ? groupById(o.slice(2)) : null;
     openSheet(`<form id="renameForm" data-id="${d.id}" style="display:flex;flex-direction:column;gap:12px" autocomplete="off">
-      <h2 style="font-size:20px">단어장 이름 변경</h2>
-      <input class="input" id="renameIn" required value="${esc(d.name)}" aria-label="단어장 이름">
+      <h2 style="font-size:20px">단어장 편집</h2>
+      <div class="field"><label for="renameIn">이름</label><input class="input" id="renameIn" required value="${esc(d.name)}"></div>
+      <div class="field"><label for="deckNewIn">하루 새 카드</label>
+        <input class="input num" id="deckNewIn" type="number" min="0" max="999" inputmode="numeric" value="${hasLimit(d.newPerDay) ? d.newPerDay : ''}" placeholder="기본 ${db.settings.newPerDay}장">
+        <p class="hintline" style="margin:4px 0 0">${viaGroup ? `지금은 '${esc(viaGroup.name)}' 그룹의 ${groupExam(viaGroup, Date.now()) ? '시험 일정' : '한도'}를 따라서 이 값은 쓰이지 않아요.` : '비워 두면 설정의 기본값을 써요. 양방향이면 단어 → 뜻, 뜻 → 단어 카드를 합친 수예요.'}</p>
+      </div>
       <div class="row end"><button type="button" class="btn" data-action="sheet-close">취소</button><button class="btn primary" type="submit">저장</button></div>
     </form>`);
   },
@@ -3362,14 +3496,21 @@ document.addEventListener('submit', e => {
     const name = $('gName').value.trim(); if (!name) { $('gName').focus(); return; }
     const deckIds = [...f.querySelectorAll('input[name=gDeck]:checked')].map(x => x.value);
     const examDate = $('gDate').value || '';
+    const nv = $('gNew').value.trim(), n = Math.floor(Number(nv));
     let g = groupById(f.dataset.id);
     if (g) Object.assign(g, { name, deckIds, examDate, updatedAt: Date.now() });
     else { g = { id: uid(), name, deckIds, examDate, createdAt: Date.now(), updatedAt: Date.now() }; db.groups.push(g); }
+    if (nv !== '' && Number.isFinite(n) && n >= 0) g.newPerDay = Math.min(n, 999); else delete g.newPerDay;
     save(); closeSheet(); resetSessions(); render();
     toast(f.dataset.id ? '그룹을 저장했어요' : `'${name}' 그룹을 만들었어요`);
   } else if (f.id === 'renameForm') {
     const d = deckById(f.dataset.id); const name = $('renameIn').value.trim();
-    if (d && name) { d.name = name; d.updatedAt = Date.now(); save(); }
+    const nv = $('deckNewIn').value.trim(), n = Math.floor(Number(nv));
+    if (d && name) {
+      d.name = name;
+      if (nv !== '' && Number.isFinite(n) && n >= 0) d.newPerDay = Math.min(n, 999); else delete d.newPerDay;
+      d.updatedAt = Date.now(); save(); resetSessions();
+    }
     closeSheet(); render();
   }
 });

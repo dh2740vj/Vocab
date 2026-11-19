@@ -462,6 +462,9 @@ button,.btn,.choice,.rowname,.term,select,.input{transition:color .2s ease,borde
 .dist .lbl b{color:var(--ink);font-weight:600}
 .pastebox summary{cursor:pointer;font-size:13px;color:var(--muted);padding:4px 0}
 .pastebox[open]{display:flex;flex-direction:column;gap:10px}
+.seg.wrap{display:grid;grid-template-columns:repeat(var(--n),1fr);width:100%;box-sizing:border-box}
+.seg.wrap button{justify-content:center}
+@media (max-width:519px){.seg.wrap.many{grid-template-columns:1fr 1fr}}
 .keyhint{display:none}
 kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;background:var(--surface);color:var(--ink)}
 @media (hover:hover) and (pointer:fine){.keyhint{display:block}.touchhint{display:none}}
@@ -1589,7 +1592,45 @@ const sorters = {
   wrong: (a, b) => (b.wrong || 0) - (a.wrong || 0) || b.createdAt - a.createdAt,
 };
 const sessions = { cards: null, dict: null, mean: null, quiz: null, review: null };
-const opts = { fcSource: 'all', fcFront: 'term', qzDir: 't2m' };
+const opts = { src: 'all', fcFront: 'term', qzDir: 't2m' };
+/* ---------- 자유 연습의 단어 범위 ----------
+   오늘의 복습 상태(cardStates)를 읽기만 함. 자유 연습 결과는 복습 일정에 반영하지 않음 */
+const SOURCES = {
+  all:     { name: '모든 단어' },
+  learned: { name: '배운 단어',   hint: '오늘의 복습에서 한 번 이상 본 단어만 나와요.' },
+  weak:    { name: '취약 단어',   hint: "오늘의 복습에서 '다시'를 누른 적이 있거나 다시 배우는 중인 단어예요. 많이 틀린 단어부터 나와요." },
+  unknown: { name: '모르는 단어', hint: '' },
+};
+// 단어 → 두 방향 카드 상태 (한 번에 표를 만들어 빠르게)
+function cardsByWord(){
+  const m = new Map(db.cardStates.map(c => [c.id, c]));
+  return w => [m.get(w.id), m.get(w.id + REV)].filter(Boolean);
+}
+// 취약 점수: 잊은 횟수 합 + 다시 배우는 중이면 1
+function weakScore(cs){ return cs.reduce((n, c) => n + (c.lapses || 0) + (c.state === 'relearning' ? 1 : 0), 0); }
+function srcPool(words, src = opts.src){
+  if (src === 'unknown') return words.filter(w => w.unknown);
+  if (src !== 'learned' && src !== 'weak') return words;
+  const cs = cardsByWord();
+  if (src === 'learned') return words.filter(w => cs(w).some(c => c.state !== 'new'));
+  return words.filter(w => weakScore(cs(w)) > 0);
+}
+// 단어 범위 고르기. 고른 범위가 비었으면 모든 단어로 돌림. 이 범위에서 쓸 수 있는 단어를 돌려줌
+function srcPicker(words, label){
+  const counts = Object.fromEntries(Object.keys(SOURCES).map(k => [k, srcPool(words, k).length]));
+  const showUnk = !isUnkScope(db.settings.currentDeck);
+  if (!counts[opts.src] || (opts.src === 'unknown' && !showUnk)) opts.src = 'all';
+  const keys = Object.keys(SOURCES).filter(k => k === 'all' || (counts[k] && (k !== 'unknown' || showUnk)));
+  const hint = SOURCES[opts.src].hint;
+  return {
+    pool: srcPool(words),
+    html: `<div class="field"><label>${label}</label>
+      ${keys.length > 1 ? `<div class="seg wrap ${keys.length > 2 ? 'many' : ''}" style="--n:${keys.length}">${keys.map(k => `<button data-action="set-opt" data-key="src" data-val="${k}" aria-pressed="${opts.src === k}">${SOURCES[k].name} <span class="num">${counts[k]}</span></button>`).join('')}</div>`
+        : `<p class="muted" style="font-size:13px;margin:0">모든 단어 <span class="num">${counts.all}</span>개 · 오늘의 복습을 하면 '배운 단어', '취약 단어'로도 고를 수 있어요.</p>`}
+      ${hint ? `<p class="hintline" style="margin:2px 0 0">${hint}</p>` : ''}
+    </div>`
+  };
+}
 // 모드별 문제 수: 숫자 또는 'all'(전체). 기기마다 기억함
 const COUNT_DEFAULT = { cards: 30, dict: 10, mean: 10, quiz: 10 };
 function getCount(mode){ const c = (db.settings.counts || {})[mode]; return c === 'all' || (Number.isInteger(c) && c > 0) ? c : COUNT_DEFAULT[mode]; }
@@ -1619,6 +1660,10 @@ function pickFor(mode, words, onlyDue){
   const pool = onlyDue ? words.filter(isDue) : words;
   const n = resolveCount(mode, pool.length);
   if (n >= pool.length) return shuffle(pool).map(w => w.id);
+  if (opts.src === 'weak') {
+    const cs = cardsByWord();
+    return shuffle(pool).sort((a, b) => weakScore(cs(b)) - weakScore(cs(a))).slice(0, n).map(w => w.id);
+  }
   return pickSession(pool, n, false);
 }
 function resetSessions(){ sessions.cards = sessions.dict = sessions.mean = sessions.quiz = sessions.review = null; }
@@ -2259,17 +2304,10 @@ function viewCards(){
   if (!words.length) return emptyState('이 단어장에는 아직 단어가 없어요.');
   const s = sessions.cards;
   if (!s) {
-    const due = words.filter(isDue).length, unk = words.filter(w => w.unknown).length;
-    if (opts.fcSource === 'unknown' && !unk) opts.fcSource = 'all';
-    const avail = fcPool(words).length;
+    const sp = srcPicker(words, '카드 범위'), avail = sp.pool.length;
     return `<section class="panel">
       <h2>플래시카드</h2>
-      <div class="field"><label>카드 범위</label>
-        <div class="seg">
-          <button data-action="set-opt" data-key="fcSource" data-val="all" aria-pressed="${opts.fcSource === 'all'}">모든 단어 <span class="num">${words.length}</span></button>
-          ${unk ? `<button data-action="set-opt" data-key="fcSource" data-val="unknown" aria-pressed="${opts.fcSource === 'unknown'}">모르는 단어 <span class="num">${unk}</span></button>` : ''}
-        </div>
-      </div>
+      ${sp.html}
       ${avail ? countPicker('cards', avail, '장') : ''}
       <div class="field"><label>앞면</label>
         <div class="seg">
@@ -2313,9 +2351,6 @@ function flipCard(){
   s.flipped = !s.flipped;
   $('card')?.classList.toggle('flipped', s.flipped);
 }
-function fcPool(words){
-  return opts.fcSource === 'due' ? words.filter(isDue) : opts.fcSource === 'unknown' ? words.filter(w => w.unknown) : words;
-}
 function answerCard(ok){
   const s = sessions.cards; if (!s || s.i >= s.queue.length) return;
   const id = s.queue[s.i];
@@ -2353,12 +2388,14 @@ function viewDict(){
   if (!words.length) return emptyState('이 단어장에는 아직 단어가 없어요.');
   const s = sessions.dict;
   if (!s) {
+    const sp = srcPicker(words, '단어 범위'), avail = sp.pool.length;
     return `<section class="panel">
       <h2>받아쓰기</h2>
-      ${countPicker('dict', words.length, '개')}
+      ${sp.html}
+      ${countPicker('dict', avail, '개')}
       <p class="hintline">발음을 듣고 철자를 써요. 대소문자와 띄어쓰기는 채점하지 않아요.</p>
       ${canSpeak ? '' : `<p class="banner">이 브라우저는 음성 재생을 지원하지 않아요. 뜻을 보고 단어를 쓰는 방식으로 진행돼요.</p>`}
-      <div class="row end"><button class="btn primary" data-action="dc-start">${startLabel('dict', words.length, '개')}</button></div>
+      <div class="row end"><button class="btn primary" data-action="dc-start">${startLabel('dict', avail, '개')}</button></div>
     </section>`;
   }
   if (s.i >= s.queue.length) {
@@ -2406,11 +2443,13 @@ function viewMean(){
   if (!words.length) return emptyState('이 단어장에는 아직 단어가 없어요.');
   const s = sessions.mean;
   if (!s) {
+    const sp = srcPicker(words, '단어 범위'), avail = sp.pool.length;
     return `<section class="panel">
       <h2>뜻쓰기</h2>
-      ${countPicker('mean', words.length, '개')}
+      ${sp.html}
+      ${countPicker('mean', avail, '개')}
       <p class="hintline">뜻이 여러 개면 하나만 써도 정답이에요. 채점이 틀리면 '맞은 걸로 처리'를 누르세요.</p>
-      <div class="row end"><button class="btn primary" data-action="mn-start">${startLabel('mean', words.length, '개')}</button></div>
+      <div class="row end"><button class="btn primary" data-action="mn-start">${startLabel('mean', avail, '개')}</button></div>
     </section>`;
   }
   if (s.i >= s.queue.length) {
@@ -2478,17 +2517,19 @@ function viewQuiz(){
   const key = opts.qzDir === 't2m' ? 'meaning' : 'term';
   const poolOk = new Set(quizPool(words, opts.qzDir).map(w => norm(w[key]))).size >= 4;
   if (!s) {
+    const sp = srcPicker(words, '단어 범위'), avail = sp.pool.length;
     return `<section class="panel">
       <h2>퀴즈</h2>
+      ${sp.html}
       <div class="field"><label>문제 방향</label>
         <div class="seg">
           <button data-action="set-opt" data-key="qzDir" data-val="t2m" aria-pressed="${opts.qzDir === 't2m'}">단어 → 뜻</button>
           <button data-action="set-opt" data-key="qzDir" data-val="m2t" aria-pressed="${opts.qzDir === 'm2t'}">뜻 → 단어</button>
         </div>
       </div>
-      ${countPicker('quiz', words.length, '문제')}
+      ${countPicker('quiz', avail, '문제')}
       ${poolOk ? '' : `<p class="banner">보기를 만들려면 서로 다른 단어가 최소 4개 필요해요. 단어를 조금 더 추가해 주세요.</p>`}
-      <div class="row end"><button class="btn primary" data-action="qz-start" ${poolOk ? '' : 'disabled'}>${startLabel('quiz', words.length, '문제')}</button></div>
+      <div class="row end"><button class="btn primary" data-action="qz-start" ${poolOk ? '' : 'disabled'}>${startLabel('quiz', avail, '문제')}</button></div>
     </section>`;
   }
   if (s.i >= s.qs.length) {
@@ -2909,7 +2950,7 @@ const actions = {
   'srs-speak': () => { const s = sessions.review, w = s && s.cur && wordById(wid(s.cur)); if (w) speakWord(w); },
   'exam-final': () => {
     // 시험 직전 총정리: 일정과 상관없이 그룹 전체를 자유 플래시카드로 (몰라요는 모르는 단어에 모임)
-    opts.fcSource = 'all'; setCount('cards', 'all');
+    opts.src = 'all'; setCount('cards', 'all');
     view = 'cards'; lastMode = 'cards'; sessions.cards = null; window.scrollTo(0, 0); render();
     actions['fc-start']();
   },
@@ -2947,7 +2988,7 @@ const actions = {
   'speak-word': a => { const w = wordById(a.dataset.id); if (w) speakWord(w); },
   'edit-word': a => editSheet(a.dataset.id),
   'sheet-close': () => closeSheet(),
-  'study-unk': () => { opts.fcSource = 'all'; view = 'cards'; lastMode = 'cards'; window.scrollTo(0, 0); render(); },
+  'study-unk': () => { opts.src = 'all'; view = 'cards'; lastMode = 'cards'; window.scrollTo(0, 0); render(); },
   'group-new': () => groupSheet(null),
   'group-edit': a => groupSheet(a.dataset.id),
   'group-delete': () => {
@@ -3117,7 +3158,7 @@ const actions = {
   },
   'dup-edit': a => { pendingAdd = null; editSheet(a.dataset.id); },
   // 뜻쓰기
-  'mn-start': () => startMean(pickFor('mean', currentWords())),
+  'mn-start': () => startMean(pickFor('mean', srcPool(currentWords()))),
   'mn-speak': () => { const s = sessions.mean; const w = s && wordById(s.queue[s.i]); if (w) speakWord(w); },
   'mn-example': () => { const s = sessions.mean; s.input = $('meanInput')?.value ?? s.input; s.showExample = !s.showExample; render(); },
   'mn-override': () => {
@@ -3140,7 +3181,7 @@ const actions = {
   // 플래시카드
   'fc-start': () => {
     const words = currentWords();
-    const ids = pickFor('cards', fcPool(words));
+    const ids = pickFor('cards', srcPool(words));
     if (!ids.length) { toast('카드가 없어요'); return; }
     sessions.cards = { queue: ids, i: 0, known: 0, missed: [], flipped: false }; render();
   },
@@ -3150,7 +3191,7 @@ const actions = {
   'fc-retry': () => { const ids = shuffle(sessions.cards.missed); sessions.cards = { queue: ids, i: 0, known: 0, missed: [], flipped: false }; render(); },
   'fc-new': () => { sessions.cards = null; render(); },
   // 받아쓰기
-  'dc-start': () => startDict(pickFor('dict', currentWords())),
+  'dc-start': () => startDict(pickFor('dict', srcPool(currentWords()))),
   'dc-play': a => { const s = sessions.dict; const w = s && wordById(s.queue[s.i]); if (w) speakWord(w, a.dataset.rate ? Number(a.dataset.rate) : undefined); },
   'dc-meaning': () => { const s = sessions.dict; s.input = $('dictInput')?.value ?? s.input; s.showMeaning = !s.showMeaning; render(); },
   'dc-next': () => {
@@ -3162,7 +3203,7 @@ const actions = {
   'dc-retry': () => startDict(shuffle(sessions.dict.missed)),
   'dc-new': () => { sessions.dict = null; render(); },
   // 퀴즈
-  'qz-start': () => startQuiz(pickFor('quiz', currentWords())),
+  'qz-start': () => startQuiz(pickFor('quiz', srcPool(currentWords()))),
   'qz-choose': a => chooseQuiz(Number(a.dataset.idx)),
   'qz-speak': () => { const s = sessions.quiz; const w = s && wordById(s.qs[s.i].id); if (w) speakWord(w); },
   'qz-next': () => { const s = sessions.quiz; s.i++; s.selected = null; render(); },
